@@ -1,0 +1,16 @@
+Decompile the APK
+    Using APKTool you can access to the smali code and resources:
+    apktool d APP.apk
+
+Recompile apk file
+    apktool b . #In the folder generated when you decompiled the application
+
+sign the new apk file
+    generate key
+        keytool -genkey -v -keystore key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias <your-alias>
+    sign the file
+        jarsigner -keystore key.jks path/to/dist/* <your-alias>
+
+https://book.hacktricks.xyz/mobile-pentesting/android-app-pentesting/smali-changes
+
+
