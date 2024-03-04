@@ -11,6 +11,7 @@ def extract_permissions():
     print('')
 
 def extract_ngrams(filename, n=2):
+    # java -Xmx512m -jar path_to_baksmali.jar dexfile.dex
     with open(filename) as f:
         token = ntlk.word_tokenize(f.read())
         ngram_list = ngrams(token, n)
@@ -32,14 +33,5 @@ def extract_cfg():
 def extract_api():
     print('')
 
-for filename in os.listdir(SAMPLE_DIR):
-    f = os.path.join(SAMPLE_DIR, filename)
-    unzip_dir = f + '_unzip'
 
-    subprocess.run(["apk", "d", f, "-o", unzip_dir]) 
-    # if not os.path.exists(unzip_dir):
-    #     os.makedirs(unzip_dir)
-    #     if os.path.isfile(f):
-    #         with zipfile.ZipFile(f, 'f') as zip_f:
-    #             zip_f.extractall(unzip_dir)
-    #         unzip_dir
+subprocess.run(['sh', './unpack.sh'])
