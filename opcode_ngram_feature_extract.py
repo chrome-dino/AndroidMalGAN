@@ -7,7 +7,7 @@ N_COUNT = 3
 std_codes = {}  # empty list which will later contain all the standard op-codes read from the ops.txt file
 
 
-def labeled_data(root_dir='.', ngram_features=None, malware=False):
+def labeled_data(root_dir='.', ngram_features=None):
     samples = []
     final = []
     for root, dirs, files in os.walk('.'):
@@ -52,8 +52,8 @@ def labeled_data(root_dir='.', ngram_features=None, malware=False):
                         for n in ngrams:
                             if n in row.keys():
                                 row[n] += 1
-                        row['malware'] = malware
-                        row['md5'] = file_dest.split('\\')[-2]
+                        # row['malware'] = malware
+                        # row['md5'] = file_dest.split('\\')[-2]
                         final.append(row)
     return final
 
@@ -118,9 +118,9 @@ benign_ngrams = extract_ngram_features(root_dir='benign_samples', feature_count=
 
 ngram_features = list(set(malware_ngrams + benign_ngrams))
 
-malware_data = labeled_data(root_dir='malware_samples', ngram_features=ngram_features, malware=True)
+malware_data = labeled_data(root_dir='malware_samples', ngram_features=ngram_features)
 df = pd.DataFrame(malware_data)
 df.to_csv('malware.csv')
-benign_data = labeled_data(root_dir='benign_samples', ngram_features=ngram_features, malware=False)
+benign_data = labeled_data(root_dir='benign_samples', ngram_features=ngram_features)
 df = pd.DataFrame(benign_data)
 df.to_csv('benign.csv')

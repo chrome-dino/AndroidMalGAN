@@ -13,4 +13,7 @@ sign the new apk file
 
 https://book.hacktricks.xyz/mobile-pentesting/android-app-pentesting/smali-changes
 
+leaky relu is good activation func for gans
+gans must be trained slowly ie small learning rate + large number of training epochs
+
 

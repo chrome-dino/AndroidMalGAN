@@ -1,176 +1,264 @@
-"""
-The model is adapted from the tensorflow tutorial:
-https://www.tensorflow.org/get_started/mnist/pros
-"""
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-import tensorflow as tf
-import os
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+import configparser
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.model_selection import train_test_split
 
 
-class Model(object):
+import numpy as np
+import matplotlib.pyplot as plt
+from IPython import display
+import sys
+
+display.set_matplotlib_formats('svg')
+
+config = configparser.ConfigParser()
+config.read("settings.ini")
+
+FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
+LEARNING_RATE = 0.0003
+NUM_EPOCHS = 50000
+L2_LAMBDA = 0.01
+BATCH_SIZE = 100
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+def train_ngram_model():
+    discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_opcode_ngram_model(LEARNING_RATE,
+                                                                                                 L2_LAMBDA)
+    discriminator.to(DEVICE)
+    generator.to(DEVICE)
+
+    data_malware = np.loadtxt(open('malware.csv', 'rb'), delimiter=',')
+    data_benign = np.loadtxt(open('benign.csv', 'rb'), delimiter=',')
+
+    labels_benign = data_benign[:, 0]
+    data_benign = data_benign[:, 1:]
+
+    labels_malware = data_malware[:, 0]
+    data_malware = data_malware[:, 1:]
+    
+    # normalize the data to a range of [-1 1] (b/c tanh output)
+    dataNorm_benign = data_benign / np.max(data_benign)
+    dataNorm_benign = 2 * dataNorm_benign - 1
+
+    dataNorm_malware = data_malware / np.max(data_malware)
+    dataNorm_malware = 2 * dataNorm_malware - 1
+
+    # convert to tensor
+    data_tensor_benign = torch.tensor(dataNorm_benign).float()
+    data_tensor_malware = torch.tensor(dataNorm_malware).float()
+
+    partition = [.8, .1, .1]
+    # use scikitlearn to split the data
+    train_data_benign, test_data_tensor_benign, train_labels_benign, test_labels_benign = train_test_split(
+        data_tensor_benign, labels_benign, test_size=partition[0])
+    dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_tensor_benign,
+        test_labels_benign, test_size=partition[1]/(partition[1] + partition[2]))
+
+    train_data_malware, test_data_tensor_malware, train_labels_malware, test_labels_malware = train_test_split(
+        data_tensor_malware, labels_malware, test_size=partition[0])
+    dev_data_malware, test_data_malware, dev_labels_malware, test_labels_malware = train_test_split(
+        test_data_tensor_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]))
+
+    # then convert them into PyTorch Datasets (note: already converted to tensors)
+    # train_data_benign = TensorDataset(train_data_benign, train_labels_benign)
+    # dev_data_benign = TensorDataset(dev_data_benign, dev_labels_benign)
+    # test_data_benign = TensorDataset(test_data_benign, test_labels_benign)
+
+    # train_data_malware = TensorDataset(train_data_malware, train_labels_malware)
+    # dev_data_malware = TensorDataset(dev_data_malware, dev_labels_malware)
+    # test_data_malware = TensorDataset(test_data_malware, test_labels_malware)
+
+    # # finally, translate into dataloader objects
+    # train_loader_benign = DataLoader(train_data_benign, shuffle=True, batch_size=BATCH_SIZE, drop_last=True)
+    # test_loader_benign = DataLoader(test_data_benign, shuffle=True, batch_size=test_data_benign.tensors[0].shape[0])
+    #
+    # train_loader_malware = DataLoader(train_data_malware, shuffle=True, batch_size=BATCH_SIZE, drop_last=True)
+    # test_loader_malware = DataLoader(test_data_malware, shuffle=True, batch_size=test_data_malware.tensors[0].shape[0])
+
+    # initialize accuracies as empties (not storing losses here)
+    trainAcc = []
+    testAcc = []
+
+    start = 0
+
+    losses = torch.zeros((NUM_EPOCHS, 2))
+    disDecs = np.zeros((NUM_EPOCHS, 2))  # disDecs = discriminator decisions
+    for e in range(NUM_EPOCHS):
+        for step in range(data_tensor_benign.shape[0] // BATCH_SIZE):
+        # for X, y in train_loader_benign:
+            malware = train_data_malware[start: start + BATCH_SIZE]
+
+            noise = np.random.uniform(0, 1, (BATCH_SIZE, generator.noise_dims))
+            malware_noise = torch.cat(malware, noise, 1)
+
+            gen_malware = generator(malware_noise)
+            benign = train_data_benign[start: start + BATCH_SIZE]
+
+
+
+            # create minibatches of REAL and FAKE images
+            # randidx = torch.randint(data_tensor_benign.shape[0], (BATCH_SIZE,))
+
+            # get batch of benign
+            # benign = data_tensor_benign[randidx, :].to(DEVICE)
+
+            # get batch of generated malware
+            # gen_malware = generator(torch.randn(BATCH_SIZE, 85).to(DEVICE))  # output of generator
+
+            # labels used for real and fake images
+            benign_labels = torch.ones(BATCH_SIZE, 1).to(DEVICE)
+            mal_labels = torch.zeros(BATCH_SIZE, 1).to(DEVICE)
+
+
+            ### ---------------- Train the discriminator ---------------- ###
+
+            # forward pass and loss for benign
+            pred_benign = discriminator(benign)  # REAL images into discriminator
+            disc_loss_benign = lossfun(pred_benign, benign_labels)  # all labels are 1
+
+            # forward pass and loss for generated malware
+            pred_malware = discriminator(gen_malware)  # FAKE images into discriminator
+            disc_loss_malware = lossfun(pred_malware, mal_labels)  # all labels are 0
+
+            disc_loss = disc_loss_benign + disc_loss_malware
+
+            losses[e, 0] = disc_loss.item()
+            disDecs[e, 0] = torch.mean((pred_benign > .5).float()).detach()
+
+            # backprop
+            disc_optimizer.zero_grad()
+            disc_loss.backward()
+            disc_optimizer.step()
+
+
+            ### ---------------- Train the generator ---------------- ###
+
+            # create fake images and compute loss
+            # gen_malware = generator(torch.randn(BATCH_SIZE, 85).to(DEVICE))
+
+            malware = train_data_malware[start: start + BATCH_SIZE]
+
+            noise = np.random.uniform(0, 1, (BATCH_SIZE, generator.noise_dims))
+            malware_noise = torch.cat(malware, noise, 1)
+
+            gen_malware = generator(malware_noise)
+            pred_malware = discriminator(gen_malware)
+
+            # compute and collect loss and accuracy
+            gen_loss = lossfun(pred_malware, benign_labels)
+            losses[e, 1] = gen_loss.item()
+            disDecs[e, 1] = torch.mean((pred_malware > .5).float()).detach()
+
+            # backprop
+            gen_optimizer.zero_grad()
+            gen_loss.backward()
+            gen_optimizer.step()
+
+            # print out a status message
+            if (e + 1) % 500 == 0:
+                msg = f'Finished epoch {e + 1}/{NUM_EPOCHS}'
+                sys.stdout.write('\r' + msg)
+
+            start = start + BATCH_SIZE
+
+
+        # use test data?
+
+
+        fig, ax = plt.subplots(1, 3, figsize=(18, 5))
+
+        ax[0].plot(losses)
+        ax[0].set_xlabel('Epochs')
+        ax[0].set_ylabel('Loss')
+        ax[0].set_title('Model loss')
+        ax[0].legend(['Discrimator', 'Generator'])
+        # ax[0].set_xlim([4000,5000])
+
+        ax[1].plot(losses[::5, 0], losses[::5, 1], 'k.', alpha=.1)
+        ax[1].set_xlabel('Discriminator loss')
+        ax[1].set_ylabel('Generator loss')
+
+        ax[2].plot(disDecs)
+        ax[2].set_xlabel('Epochs')
+        ax[2].set_ylabel('Probablity ("real")')
+        ax[2].set_title('Discriminator output')
+        ax[2].legend(['Real', 'Fake'])
+
+        plt.show()
+
+    return losses, trainAcc, testAcc
+
+
+def create_opcode_ngram_model(learning_rate, l2lambda):
+    # build the model
+    discriminator = NgramClassifier()
+    generator = NgramGenerator()
+
+    # loss function
+    lossfun = nn.BCEWithLogitsLoss()
+
+    # optimizer
+    disc_optimizer = torch.optim.Adam(discriminator.parameters(), lr=learning_rate, weight_decay=l2lambda)
+    gen_optimizer = torch.optim.Adam(generator.parameters(), lr=learning_rate, weight_decay=l2lambda)
+
+    return discriminator, generator, lossfun, disc_optimizer, gen_optimizer
+
+
+class NgramClassifier(nn.Module):
     def __init__(self):
-        self.x_input = tf.placeholder(tf.float32, shape=[None, 3514])
-        self.y_input = tf.placeholder(tf.int64, shape=[None])
+        super().__init__()
 
-        h_fc1 = tf.layers.dense(self.x_input, 200, activation=tf.nn.relu, name="fc1")
-        h_fc2 = tf.layers.dense(h_fc1, 200, activation=tf.nn.relu, name="fc2")
+        # input layer
+        self.input = nn.Linear(NUM_EPOCHS, 350)
+        # input layer
+        self.fc1 = nn.Linear(350, 175)
+        # input layer
+        self.fc2 = nn.Linear(175, 85)
+        # output layer
+        self.output = nn.Linear(85, 1)
 
-        self.pre_softmax = tf.layers.dense(h_fc2, 2, activation=None, name="pre_softmax")
-        y_xent = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=self.y_input, logits=self.pre_softmax)
+    def forward(self, x):
 
-        self.y_softmax = tf.nn.softmax(self.pre_softmax)
+        x = self.input(x)
+        x = F.leaky_relu(x)
+        x = self.fc1(x)
+        x = F.leaky_relu(x)
+        x = self.fc2(x)
+        x = F.leaky_relu(x)
+        x = self.output(x)
 
-        self.plot_loss = y_xent
-        self.xent = tf.reduce_sum(y_xent)
+        return x
 
-        self.y_pred = tf.argmax(self.pre_softmax, 1)
 
-        self.correct_prediction = tf.equal(self.y_pred, self.y_input)
+class NgramGenerator(nn.Module):
+    def __init__(self):
+        super().__init__()
 
-        self.num_correct = tf.reduce_sum(tf.cast(self.correct_prediction, tf.int64))
-        self.accuracy = tf.cast(self.num_correct, tf.float32) / tf.cast(tf.shape(self.y_input)[0], tf.float32)
+        # amount of noise to add
+        self.noise_dims = 50
+        self.input_layers = 85
+        # input layer
+        self.input = nn.Linear(NUM_EPOCHS, self.noise_dims + self.input_layers)
+        # input layer
+        self.fc1 = nn.Linear(self.noise_dims + self.input_layers, 175)
+        # input layer
+        self.fc2 = nn.Linear(175, 175)
+        # output layer
+        self.output = nn.Linear(175, 350)
 
-        _, self.accuracy_op = \
-            tf.metrics.accuracy(labels=self.y_input, \
-                                predictions=self.y_pred)
+    def forward(self, x):
+        x = self.input(x)
+        x = F.leaky_relu(x)
+        x = self.fc1(x)
+        x = F.leaky_relu(x)
+        x = self.fc2(x)
+        x = F.leaky_relu(x)
+        x = self.output(x)
+        # x = torch.tanh(x)
+        return x
 
-        _, self.false_positive_op = tf.metrics.false_positives(self.y_input, self.y_pred)
 
-        self.weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-
-        label_mask = tf.one_hot(self.y_input,
-                                2,
-                                on_value=1.0,
-                                off_value=0.0,
-                                dtype=tf.float32)
-
-    def tf_propagate1(self, center, error_range, equation, error_row, bias_row):
-        # (784,512)*(100,784,1)->(100,784,512)->(100,512)
-        l1 = tf.reduce_sum(tf.abs(equation) * tf.expand_dims(error_range, axis=-1), axis=1)
-        upper = center + l1 + bias_row + tf.reduce_sum(error_row * \
-                                                       tf.cast(tf.greater(error_row, 0), tf.float32), axis=1)
-
-        lower = center - l1 + bias_row + tf.reduce_sum(error_row * \
-                                                       tf.cast(tf.less(error_row, 0), tf.float32), axis=1)
-
-        appr_condition = tf.cast(tf.logical_and(tf.less(lower, 0), tf.greater(upper, 0)), tf.float32)
-        mask = appr_condition * ((upper) / (upper - lower + tf.math.exp(-10.0)))
-        mask = mask + 1 - appr_condition
-        mask = mask * tf.cast(tf.greater(upper, 0), tf.float32)
-
-        bias_row = bias_row * mask
-        center = center * mask
-
-        # mask=(100,1,512)
-        mask = tf.expand_dims(mask, axis=1)
-        # (784,512)*(100,1,512)
-        equation = equation * mask
-        # (1,512)*(100,1,512)
-
-        I = tf.eye(tf.shape(mask)[-1], dtype=tf.float32)
-
-        error_row = tf.concat([error_row, \
-                               tf.expand_dims(tf.negative(lower), axis=1) * \
-                               I * tf.expand_dims(appr_condition, axis=1)], axis=1)
-
-        error_row = error_row * mask
-
-        return upper, lower, center, equation, error_row, bias_row
-
-    def tf_interval1(self, batch_size):
-        self.upper_input = tf.placeholder(tf.float32, shape=[None, 3514])
-        self.lower_input = tf.placeholder(tf.float32, shape=[None, 3514])
-        upper_input = self.upper_input
-        lower_input = self.lower_input
-
-        error_range = (upper_input - lower_input) / 2.0
-        center = (lower_input + upper_input) / 2
-        m = 3514
-        equation = tf.eye(m, dtype=tf.float32)
-        bias_row = tf.zeros([1, m], dtype=tf.float32)
-        error_row = tf.zeros([tf.shape(self.x_input)[0], 1, m], dtype=tf.float32)
-
-        center = tf.layers.dense(inputs=center, units=200, activation=None, \
-                                 name="fc1", reuse=True, use_bias=False)
-        equation = tf.layers.dense(inputs=equation, units=200, activation=None, \
-                                   name="fc1", reuse=True, use_bias=False)
-        bias_row = tf.layers.dense(inputs=bias_row, units=200, activation=None, \
-                                   name="fc1", reuse=True)
-        error_row = tf.layers.dense(inputs=error_row, units=200, activation=None, \
-                                    name="fc1", reuse=True, use_bias=False)
-
-        upper, lower, center, equation, error_row, bias_row = \
-            self.tf_propagate1(center, error_range, equation, error_row, bias_row)
-
-        center = tf.layers.dense(inputs=center, units=200, activation=None, \
-                                 name="fc2", reuse=True, use_bias=False)
-        equation = tf.layers.dense(inputs=equation, units=200, activation=None, \
-                                   name="fc2", reuse=True, use_bias=False)
-        bias_row = tf.layers.dense(inputs=bias_row, units=200, activation=None, \
-                                   name="fc2", reuse=True)
-        error_row = tf.layers.dense(inputs=error_row, units=200, activation=None, \
-                                    name="fc2", reuse=True, use_bias=False)
-
-        upper, lower, center, equation, error_row, bias_row = \
-            self.tf_propagate1(center, error_range, equation, error_row, bias_row)
-
-        equation2 = equation
-
-        center = tf.layers.dense(inputs=center, units=2, activation=None, \
-                                 name="pre_softmax", reuse=True, use_bias=False)
-        equation = tf.layers.dense(inputs=equation, units=2, activation=None, \
-                                   name="pre_softmax", reuse=True, use_bias=False)
-        bias_row = tf.layers.dense(inputs=bias_row, units=2, activation=None, \
-                                   name="pre_softmax", reuse=True)
-        error_row = tf.layers.dense(inputs=error_row, units=2, activation=None, \
-                                    name="pre_softmax", reuse=True, use_bias=False)
-
-        # normalized the output
-
-        center_t = center[0:1, self.y_input[0]]
-        equation_t = equation[0:1, :, self.y_input[0]]
-        bias_row_t = bias_row[0:1, self.y_input[0]]
-        error_row_t = error_row[0:1, :, self.y_input[0]]
-
-        for i in range(1, batch_size):
-            center_t = tf.concat([center_t, center[i:i + 1, self.y_input[i]]], axis=0)
-            equation_t = tf.concat([equation_t, equation[i:i + 1, :, self.y_input[i]]], axis=0)
-            bias_row_t = tf.concat([bias_row_t, bias_row[i:i + 1, self.y_input[i]]], axis=0)
-            error_row_t = tf.concat([error_row_t, error_row[i:i + 1, :, self.y_input[i]]], axis=0)
-
-        center = center - tf.expand_dims(center_t, axis=-1)
-        equation = equation - tf.expand_dims(equation_t, axis=-1)
-        bias_row = bias_row - tf.expand_dims(bias_row_t, axis=-1)
-        error_row = error_row - tf.expand_dims(error_row_t, axis=-1)
-
-        upper, lower, center, equation, error_row, bias_row = \
-            self.tf_propagate1(center, error_range, equation, error_row, bias_row)
-
-        self.equation = equation
-        self.error_row = error_row
-        self.bias_row = bias_row
-
-        d_xent = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=self.y_input, logits=upper)
-        self.interval_xent = tf.reduce_sum(d_xent)
-
-        # prediction based on upper bound of propagation
-        self.interval_pred = tf.argmax(upper, 1)
-
-        correct_prediction = tf.equal(self.interval_pred, self.y_input)
-
-        self.interval_num_correct = tf.reduce_sum(tf.cast(correct_prediction, tf.int64))
-        self.verified_accuracy = tf.cast(self.interval_num_correct, tf.float32) / tf.cast(tf.shape(self.y_input)[0],
-                                                                                          tf.float32)
-
-        _, self.verified_accuracy_op = \
-            tf.metrics.accuracy(labels=self.y_input, \
-                                predictions=self.interval_pred)
-
-        return
+train_ngram_model()
