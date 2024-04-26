@@ -2,7 +2,6 @@ import configparser
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 
 
@@ -22,6 +21,7 @@ NUM_EPOCHS = 50000
 L2_LAMBDA = 0.01
 BATCH_SIZE = 100
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+SAVED_MODEL_PATH = ''
 
 
 def train_ngram_model():
@@ -40,15 +40,15 @@ def train_ngram_model():
     data_malware = data_malware[:, 1:]
     
     # normalize the data to a range of [-1 1] (b/c tanh output)
-    dataNorm_benign = data_benign / np.max(data_benign)
-    dataNorm_benign = 2 * dataNorm_benign - 1
-
-    dataNorm_malware = data_malware / np.max(data_malware)
-    dataNorm_malware = 2 * dataNorm_malware - 1
+    # dataNorm_benign = data_benign / np.max(data_benign)
+    # dataNorm_benign = 2 * dataNorm_benign - 1
+    #
+    # dataNorm_malware = data_malware / np.max(data_malware)
+    # dataNorm_malware = 2 * dataNorm_malware - 1
 
     # convert to tensor
-    data_tensor_benign = torch.tensor(dataNorm_benign).float()
-    data_tensor_malware = torch.tensor(dataNorm_malware).float()
+    data_tensor_benign = torch.tensor(data_benign).float()
+    data_tensor_malware = torch.tensor(data_malware).float()
 
     partition = [.8, .1, .1]
     # use scikitlearn to split the data
@@ -189,7 +189,7 @@ def train_ngram_model():
 
         plt.show()
 
-    return losses, trainAcc, testAcc
+    return losses, trainAcc, testAcc, generator
 
 
 def create_opcode_ngram_model(learning_rate, l2lambda):
@@ -261,4 +261,5 @@ class NgramGenerator(nn.Module):
         return x
 
 
-train_ngram_model()
+losses, trainAcc, testAcc, ngram_generator = train_ngram_model()
+torch.save(ngram_generator.state_dict(), SAVED_MODEL_PATH)

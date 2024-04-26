@@ -10,18 +10,18 @@ std_codes = {}  # empty list which will later contain all the standard op-codes 
 def labeled_data(root_dir='.', ngram_features=None):
     samples = []
     final = []
-    for root, dirs, files in os.walk('.'):
+    for root, dirs, files in os.walk(root_dir):
         for name in dirs:
             if re.search("^[0-9a-fA-F]{32}$", name):
                 file_dest = os.path.join(root, name)
                 samples.append(file_dest)
 
     for s in samples:
+        smali_files = []
         for root, dirs, files in os.walk(s):
             for file in files:
                 if file.endswith(".smali"):
                     file_dest = os.path.join(root, file)
-                    smali_files = []
                     with open(file_dest, 'r') as fp:
                         smali_content = fp.readlines()
                         smali_content = [line.rstrip('\n').split(" ") for line in
@@ -37,24 +37,24 @@ def labeled_data(root_dir='.', ngram_features=None):
                                         break
                         smali_files.append(opcodes)
 
-                    ngrams = []
-                    for each_file in smali_files:
-                        file_chunks = [each_file[i:i + 2] for i in range(0, len(each_file), 2)]
-                        for i in range(len(file_chunks)):
-                            ngram = ''
-                            try:
-                                for n in range(N_COUNT):
-                                    ngram += (file_chunks[i + n])
-                                ngrams.append(ngram)
-                            except IndexError as e:
-                                break
-                        row = dict.fromkeys(ngram_features, 0)
-                        for n in ngrams:
-                            if n in row.keys():
-                                row[n] += 1
-                        # row['malware'] = malware
-                        # row['md5'] = file_dest.split('\\')[-2]
-                        final.append(row)
+        ngrams = []
+        for each_file in smali_files:
+            file_chunks = [each_file[i:i + 2] for i in range(0, len(each_file), 2)]
+            for i in range(len(file_chunks)):
+                ngram = ''
+                try:
+                    for n in range(N_COUNT):
+                        ngram += (file_chunks[i + n])
+                    ngrams.append(ngram)
+                except IndexError as e:
+                    break
+        row = dict.fromkeys(ngram_features, 0)
+        for n in ngrams:
+            if n in row.keys():
+                row[n] += 1
+        # row['malware'] = malware
+        # row['md5'] = file_dest.split('\\')[-2]
+        final.append(row)
     return final
 
 
@@ -114,9 +114,17 @@ with open('std_codes.txt', 'r') as fp:
         std_codes[opcode] = ophex
 
 malware_ngrams = extract_ngram_features(root_dir='malware_samples', feature_count=300)
-benign_ngrams = extract_ngram_features(root_dir='benign_samples', feature_count=300)
+benign_ngrams = extract_ngram_features(root_dir='benign_samples', feature_count=50)
 
 ngram_features = list(set(malware_ngrams + benign_ngrams))
+ngram_features = "\n".join(ngram_features)
+
+with open('ngram_features.txt', 'w') as file:
+    file.write(ngram_features)
+
+with open('ngram_features.txt', 'r') as file:
+    ngram_features = file.read()
+    ngram_features = ngram_features.split('\n')
 
 malware_data = labeled_data(root_dir='malware_samples', ngram_features=ngram_features)
 df = pd.DataFrame(malware_data)
