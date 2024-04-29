@@ -7,10 +7,11 @@ from sklearn.model_selection import train_test_split
 
 import numpy as np
 import matplotlib.pyplot as plt
-from IPython import display
+import matplotlib_inline
+
 import sys
 
-display.set_matplotlib_formats('svg')
+matplotlib_inline.backend_inline.set_matplotlib_formats()('svg')
 
 config = configparser.ConfigParser()
 config.read("settings.ini")
@@ -27,11 +28,11 @@ SAVED_MODEL_PATH = ''
 def train_ngram_model():
     discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_opcode_ngram_model(LEARNING_RATE,
                                                                                                  L2_LAMBDA)
-    discriminator.to(DEVICE)
-    generator.to(DEVICE)
+    discriminator = discriminator.to(DEVICE)
+    generator = generator.to(DEVICE)
 
-    data_malware = np.loadtxt(open('malware.csv', 'rb'), delimiter=',')
-    data_benign = np.loadtxt(open('benign.csv', 'rb'), delimiter=',')
+    data_malware = np.loadtxt('malware.csv', delimiter=',')
+    data_benign = np.loadtxt('benign.csv', delimiter=',')
 
     labels_benign = data_benign[:, 0]
     data_benign = data_benign[:, 1:]
@@ -91,8 +92,8 @@ def train_ngram_model():
         # for X, y in train_loader_benign:
             malware = train_data_malware[start: start + BATCH_SIZE]
 
-            noise = np.random.uniform(0, 1, (BATCH_SIZE, generator.noise_dims))
-            malware_noise = torch.cat(malware, noise, 1)
+            noise = torch.as_tensor(np.random.uniform(0, 1, (BATCH_SIZE, generator.noise_dims)))
+            malware_noise = torch.cat((malware, noise), 1)
 
             gen_malware = generator(malware_noise)
             benign = train_data_benign[start: start + BATCH_SIZE]
@@ -141,8 +142,8 @@ def train_ngram_model():
 
             malware = train_data_malware[start: start + BATCH_SIZE]
 
-            noise = np.random.uniform(0, 1, (BATCH_SIZE, generator.noise_dims))
-            malware_noise = torch.cat(malware, noise, 1)
+            noise = torch.as_tensor(np.random.uniform(0, 1, (BATCH_SIZE, generator.noise_dims)))
+            malware_noise = torch.cat((malware, noise), 1)
 
             gen_malware = generator(malware_noise)
             pred_malware = discriminator(gen_malware)
@@ -208,17 +209,17 @@ def create_opcode_ngram_model(learning_rate, l2lambda):
 
 
 class NgramClassifier(nn.Module):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, d_input_dim=350):
+        super(NgramClassifier, self).__init__()
 
         # input layer
-        self.input = nn.Linear(NUM_EPOCHS, 350)
+        self.input = nn.Linear(d_input_dim, 300)
         # input layer
-        self.fc1 = nn.Linear(350, 175)
+        self.fc1 = nn.Linear(self.input.out_features, self.input.out_features//2)
         # input layer
-        self.fc2 = nn.Linear(175, 85)
+        self.fc2 = nn.Linear(self.fc1.out_features, self.fc1.out_features//2)
         # output layer
-        self.output = nn.Linear(85, 1)
+        self.output = nn.Linear(self.fc2.out_features, 1)
 
     def forward(self, x):
 
@@ -234,20 +235,20 @@ class NgramClassifier(nn.Module):
 
 
 class NgramGenerator(nn.Module):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, noise_dims=15, input_layers=35, g_output_dim=350):
+        super(NgramGenerator, self).__init__()
 
         # amount of noise to add
-        self.noise_dims = 50
-        self.input_layers = 85
+        self.noise_dims = noise_dims
+        self.input_layers = input_layers
         # input layer
-        self.input = nn.Linear(NUM_EPOCHS, self.noise_dims + self.input_layers)
+        self.input = nn.Linear(self.noise_dims + self.input_layers, 75)
         # input layer
-        self.fc1 = nn.Linear(self.noise_dims + self.input_layers, 175)
+        self.fc1 = nn.Linear(self.input.out_features, self.input.out_features*2)
         # input layer
-        self.fc2 = nn.Linear(175, 175)
+        self.fc2 = nn.Linear(self.fc1.out_features, self. fc1.out_features*2)
         # output layer
-        self.output = nn.Linear(175, 350)
+        self.output = nn.Linear(self.fc2.out_features, g_output_dim)
 
     def forward(self, x):
         x = self.input(x)
@@ -261,5 +262,11 @@ class NgramGenerator(nn.Module):
         return x
 
 
-losses, trainAcc, testAcc, ngram_generator = train_ngram_model()
-torch.save(ngram_generator.state_dict(), SAVED_MODEL_PATH)
+def train():
+    losses, trainAcc, testAcc, ngram_generator = train_ngram_model()
+    print(f'Losses: {str(losses)}')
+    print(f'Training Accuracy: {str(trainAcc)}')
+    print(f'Test Accuracy: {str(testAcc)}')
+    torch.save(ngram_generator.state_dict(), SAVED_MODEL_PATH)
+    print(f'Generator model saved to: {SAVED_MODEL_PATH}')
+    print('Finished!')
