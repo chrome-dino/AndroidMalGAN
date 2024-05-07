@@ -11,12 +11,12 @@ import matplotlib_inline
 
 import sys
 
-matplotlib_inline.backend_inline.set_matplotlib_formats()('svg')
+matplotlib_inline.backend_inline.set_matplotlib_formats('svg')
 
 config = configparser.ConfigParser()
 config.read("settings.ini")
 
-FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
+# FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
 LEARNING_RATE = 0.0003
 NUM_EPOCHS = 50000
 L2_LAMBDA = 0.01
@@ -41,11 +41,11 @@ def train_ngram_model():
     data_malware = data_malware[:, 1:]
     
     # normalize the data to a range of [-1 1] (b/c tanh output)
-    # dataNorm_benign = data_benign / np.max(data_benign)
-    # dataNorm_benign = 2 * dataNorm_benign - 1
-    #
-    # dataNorm_malware = data_malware / np.max(data_malware)
-    # dataNorm_malware = 2 * dataNorm_malware - 1
+    data_benign = data_benign / np.max(data_benign)
+    data_benign = 2 * data_benign - 1
+
+    data_malware = data_malware / np.max(data_malware)
+    data_malware = 2 * data_malware - 1
 
     # convert to tensor
     data_tensor_benign = torch.tensor(data_benign).float()
@@ -55,13 +55,13 @@ def train_ngram_model():
     # use scikitlearn to split the data
     train_data_benign, test_data_tensor_benign, train_labels_benign, test_labels_benign = train_test_split(
         data_tensor_benign, labels_benign, test_size=partition[0])
-    dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_tensor_benign,
-        test_labels_benign, test_size=partition[1]/(partition[1] + partition[2]))
+    # dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_tensor_benign,
+    #     test_labels_benign, test_size=partition[1]/(partition[1] + partition[2]))
 
     train_data_malware, test_data_tensor_malware, train_labels_malware, test_labels_malware = train_test_split(
         data_tensor_malware, labels_malware, test_size=partition[0])
-    dev_data_malware, test_data_malware, dev_labels_malware, test_labels_malware = train_test_split(
-        test_data_tensor_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]))
+    # dev_data_malware, test_data_malware, dev_labels_malware, test_labels_malware = train_test_split(
+    #     test_data_tensor_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]))
 
     # then convert them into PyTorch Datasets (note: already converted to tensors)
     # train_data_benign = TensorDataset(train_data_benign, train_labels_benign)
@@ -88,7 +88,7 @@ def train_ngram_model():
     losses = torch.zeros((NUM_EPOCHS, 2))
     disDecs = np.zeros((NUM_EPOCHS, 2))  # disDecs = discriminator decisions
     for e in range(NUM_EPOCHS):
-        for step in range(data_tensor_benign.shape[0] // BATCH_SIZE):
+        for step in range(data_tensor_malware.shape[0] // BATCH_SIZE):
         # for X, y in train_loader_benign:
             malware = train_data_malware[start: start + BATCH_SIZE]
 
@@ -225,11 +225,15 @@ class NgramClassifier(nn.Module):
 
         x = self.input(x)
         x = F.leaky_relu(x)
+        x = F.dropout(x, 0.3)
         x = self.fc1(x)
         x = F.leaky_relu(x)
+        x = F.dropout(x, 0.3)
         x = self.fc2(x)
         x = F.leaky_relu(x)
+        x = F.dropout(x, 0.3)
         x = self.output(x)
+        x = F.sigmoid(x)
 
         return x
 
@@ -252,13 +256,13 @@ class NgramGenerator(nn.Module):
 
     def forward(self, x):
         x = self.input(x)
-        x = F.leaky_relu(x)
+        x = F.leaky_relu(x, 0.2)
         x = self.fc1(x)
-        x = F.leaky_relu(x)
+        x = F.leaky_relu(x, 0.2)
         x = self.fc2(x)
-        x = F.leaky_relu(x)
+        x = F.leaky_relu(x, 0.2)
         x = self.output(x)
-        # x = torch.tanh(x)
+        x = torch.tanh(x)
         return x
 
 

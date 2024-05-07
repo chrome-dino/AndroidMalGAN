@@ -8,6 +8,6 @@ setuptools.setup(
     author_email="kenji.harada@trojans.dsu.edu",
     package_dir={"": "AndroidMalGAN"},
     packages=setuptools.find_namespace_packages(where="AndroidMalGAN"),
-    install_requires=['numpy', 'torch', 'matplotlib', 'matplotlib_inline', 'sklearn', 'pandas'],
+    install_requires=['numpy', 'torch', 'matplotlib', 'matplotlib_inline', 'scikit-learn', 'pandas'],
     include_package_data=True
 )

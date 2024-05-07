@@ -105,30 +105,31 @@ def extract_ngram_features(root_dir='.', feature_count=300):
     return [filtered_ngrams[n][0] for n in range(len(filtered_ngrams))]
 
 
-with open('std_codes.txt', 'r') as fp:
-    read_lines = fp.readlines()
-    for line in read_lines:
-        opline = line.split("\n")[0].split(' ')
-        opcode = opline[0]
-        ophex = opline[1]
-        std_codes[opcode] = ophex
+def extract():
+    with open('AndroidMalGAN/std_codes.txt', 'r') as fp:
+        read_lines = fp.readlines()
+        for line in read_lines:
+            opline = line.split("\n")[0].split(' ')
+            opcode = opline[0]
+            ophex = opline[1]
+            std_codes[opcode] = ophex
 
-malware_ngrams = extract_ngram_features(root_dir='malware_samples', feature_count=300)
-benign_ngrams = extract_ngram_features(root_dir='benign_samples', feature_count=50)
+    malware_ngrams = extract_ngram_features(root_dir='malware_samples', feature_count=300)
+    benign_ngrams = extract_ngram_features(root_dir='benign_samples', feature_count=50)
 
-ngram_features = list(set(malware_ngrams + benign_ngrams))
-ngram_features = "\n".join(ngram_features)
+    ngram_features = list(set(malware_ngrams + benign_ngrams))
+    ngram_features = "\n".join(ngram_features)
 
-with open('ngram_features.txt', 'w') as file:
-    file.write(ngram_features)
+    with open('ngram_features.txt', 'w') as file:
+        file.write(ngram_features)
 
-with open('ngram_features.txt', 'r') as file:
-    ngram_features = file.read()
-    ngram_features = ngram_features.split('\n')
+    with open('ngram_features.txt', 'r') as file:
+        ngram_features = file.read()
+        ngram_features = ngram_features.split('\n')
 
-malware_data = labeled_data(root_dir='malware_samples', ngram_features=ngram_features)
-df = pd.DataFrame(malware_data)
-df.to_csv('malware.csv')
-benign_data = labeled_data(root_dir='benign_samples', ngram_features=ngram_features)
-df = pd.DataFrame(benign_data)
-df.to_csv('benign.csv')
+    malware_data = labeled_data(root_dir='malware_samples', ngram_features=ngram_features)
+    df = pd.DataFrame(malware_data)
+    df.to_csv('malware.csv')
+    benign_data = labeled_data(root_dir='benign_samples', ngram_features=ngram_features)
+    df = pd.DataFrame(benign_data)
+    df.to_csv('benign.csv')

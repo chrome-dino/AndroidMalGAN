@@ -12,7 +12,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def gen_code(opcode):
     idx = int(opcode, 16)
-    with open('inject_code.txt') as f:
+    with open('AndroidMalGAN/inject_code.txt') as f:
         inject_list = f.read()
     inject_list = inject_list.split('###')
     code = inject_list[idx].split('\n', 1)[1]
