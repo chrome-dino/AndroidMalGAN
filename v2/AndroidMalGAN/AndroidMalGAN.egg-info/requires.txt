@@ -1,0 +1,6 @@
+matplotlib
+matplotlib_inline
+numpy
+pandas
+scikit-learn
+torch

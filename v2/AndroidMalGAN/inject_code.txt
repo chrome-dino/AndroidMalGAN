@@ -1,0 +1,535 @@
+###nop 00
+    nop
+###move 01
+    move v3,v4
+###move/from16 02
+    move/from16 v0, v1
+###move/16 03
+    move/16 v0, v1
+###move-wide 04
+    move-wide v0, v1
+###move-wide/from16 05
+    move-wide/from16 v0, v1
+###move-wide/16 06
+    move-wide/16 v0, v1
+###move-object 07
+    move-object v0, v1
+###move-object/from16 08
+    move-object/from16 v0, v1
+###move-object/16 09
+    move-object/16 v0, v1
+###move-result 0A
+    move-result v1
+###move-result-wide 0B
+    move-result-wide v0
+###move-result-object 0C
+    move-result-object v0
+###move-exception 0D
+    move-exception v0
+###return-void 0E
+    return-void
+###return 0F
+    return v0
+###return-wide 10
+    return-wide v0
+###return-object 11
+    return-object v0
+###const/4 12
+    const/4 v0,1
+###const/16 13
+    const/16 v0, 0x0
+###const 14
+    const v0, #1
+###const/high16 15
+    const/high16 v0, #float 10.0
+###const-wide/16 16
+    const-wide/16 v0, 0x0
+###const-wide/32 17
+    const-wide/32 v0, 0x0
+###const-wide 18
+    const-wide v0, 0x0
+###const-wide/high16 19
+    const-wide/high16 v0, #double 10.0
+###const-string 1A
+    const-string v1, "android.support.v4.app.INotificationSideChannel"
+###const-string-jumbo 1B
+    const-string v8, ""
+###const-class 1C
+    const-class v0, Test3
+###monitor-enter 1D
+    monitor-enter v1
+###monitor-exit 1E
+    monitor-exit v1
+###check-cast 1F
+    check-cast v0, Lcn/woblog/markdowndiary/domain/Note;
+###instance-of 20
+    instance-of v0, v1, Ljava/lang/String;
+###array-length 21
+    array-length v1, v2
+###new-instance 22
+    new-instance v1, Ljava/lang/String;
+###new-array 23
+    new-array v0, v1, [S
+###filled-new-array 24
+    filled-new-array {v0,v0},[I
+###filled-new-array-range 25
+    fill-array-data v6, 00e6
+###fill-array-data 26
+    .array-data 4
+        0x1
+        0x2
+        0x3
+    .end array-data
+    fill-array-data v3, :array_0
+###throw 27
+    throw v0
+###goto 28
+    :goto_0
+    goto :goto_0
+###goto/16 29
+    :goto_0
+    goto/16 :goto_0
+###goto/32 2A
+    :goto_0
+    goto/32 :goto_0
+###packed-switch 2B
+    :pswitch_data_0
+    .packed-switch 0x0
+    .end packed-switch
+    packed-switch p1,  :pswitch_data_0
+###sparse-switch 2C
+    :sswitch_data_0
+    .sparse-switch
+    .end sparse-switch
+    sparse-switch v0, :sswitch_data_0
+###cmpl-float 2D
+    cmpl-float v0, v1, v2
+###cmpg-float 2E
+    cmpg-float v0, v1, v2
+###cmpl-double 2F
+    cmpl-double v0, v1, v2
+###cmpg-double 30
+    cmpg-double v0, v1, v2
+###cmp-long 31
+    cmp-long v0, v1, v2
+###if-eq 32
+    :cond_0
+    if-eq v0, v1, :cond_0
+###if-ne 33
+    :cond_0
+    if-ne v0, v1, :cond_0
+###if-lt 34
+    :cond_0
+    if-lt v0, v1, :cond_0
+###if-ge 35
+    :cond_0
+    if-ge v0, v1, :cond_0
+###if-gt 36
+    :cond_0
+    if-gt v0, v1, :cond_0
+###if-le 37
+    :cond_0
+    if-le v0, v1, :cond_0
+###if-eqz 38
+    :cond_0
+    if-eqz v0, :cond_0
+###if-nez 39
+    :cond_0
+    if-nez v0, :cond_0
+###if-ltz 3A
+    :cond_0
+    if-ltz v0, :cond_0
+###if-gez 3B
+    :cond_0
+    if-gez v0, :cond_0
+###if-gtz 3C
+    :cond_0
+    if-gtz v0, :cond_0
+###if-lez 3D
+    :cond_0
+    if-lez v0, :cond_0
+###unused_3E 3E
+
+###unused_3F 3F
+
+###unused_40 40
+
+###unused_41 41
+
+###unused_42 42
+
+###unused_43 43
+
+###aget 44
+    aget v0, v1, v2
+###aget-wide 45
+    aget-wide v0, v1, v2
+###aget-object 46
+    aget-object v0, v1, v2
+###aget-boolean 47
+    aget-boolean v0, v1, v2
+###aget-byte 48
+    aget-byte v0, v1, v2
+###aget-char 49
+    aget-char v0, v1, v2
+###aget-short 4A
+    aget-short v0, v1, v2
+###aput 4B
+    aput v0, v1, v2
+###aput-wide 4C
+    aput-wide v0, v1, v2
+###aput-object 4D
+    aput-object v0, v1, v2
+###aput-boolean 4E
+    aput-boolean v1, v0, v2
+###aput-byte 4F
+    aput-byte v2, v0, v1
+###aput-char 50
+    aput-char v3, v0, v1
+###aput-short 51
+    aput-short v0, v1, v2
+###iget 52
+    iget v0, v1, Test2.i6:I
+###iget-wide 53
+    iget-wide v0, v1, Lcom/woblog/testsmali/InstanceObject;->aLong:J
+###iget-object 54
+    iget-object v0, v1, Landroid/support/v4/app/INotificationSideChannel$Stub$Proxy;->mRemote:Landroid/os/IBinder;
+###iget-boolean 55
+    iget-boolean v12, v15, Test2.b0:Z
+###iget-byte 56
+    iget-byte v2, v3, Test3.bi1:B
+###iget-char 57
+    iget-char v0, v2, Test3.ci1:C
+###iget-short 58
+    iget-short v0, v3, Test3.si1:S
+###iput 59
+    iput v0,v2, Test2.i6:I
+###iput-wide 5A
+    iput-wide v0,v2, Test2.d0:D
+###iput-object 5B
+    iput-object v0, v1, Landroid/support/v4/app/INotificationSideChannel$Stub$Proxy;->mRemote:Landroid/os/IBinder;
+###iput-boolean 5C
+    iput-boolean v0, v3, Test2.b0:Z
+###iput-byte 5D
+    iput-byte v0, v2, Test3.bi1:B
+###iput-char 5E
+    iput-char v0, v1, Lcom/woblog/testsmali/InstanceObject;->aChar:C
+###iput-short 5F
+    iput-short v1, v2, Test3.si1:S
+###sget 60
+    sget v0, Lcom/woblog/testsmali/StatusObject;->aInt:I
+###sget-wide 61
+    sget-wide v0, Test2.l1:J
+###sget-object 62
+    sget-object v0, Ljava/lang/System;->out:Ljava/io/PrintStream;
+###sget-boolean 63
+    sget-boolean v0, Test2.sb:Z
+###sget-byte 64
+    sget-byte v0, Test3.bs1:B
+###sget-char 65
+    sget-char v0, Test3.cs1:C
+###sget-short 66
+    sget-short v0, Test3.ss1:S
+###sput 67
+    sput v0, Lcom/woblog/testsmali/StatusObject;->aInt:I
+###sput-wide 68
+    sput-wide v0, Test2.l1:J
+###sput-object 69
+    sput-object v0, Test3.os1:Ljava/lang/Object;
+###sput-boolean 6A
+    sput-boolean v0, Test3.bls1:Z
+###sput-byte 6B
+    sput-byte v0, Test3.bs1:B
+###sput-char 6C
+    sput-char v1, Test3.cs1:C
+###sput-short 6D
+    sput-short v0, Test3.ss1:S
+###invoke-virtual 6E
+    invoke-virtual {v0, v1}, Ljava/io/PrintStream;->println(Ljava/lang/String;)V
+###invoke-super 6F
+    invoke-super {v1},java.io.FilterOutputStream.close:()V
+###invoke-direct 70
+    invoke-direct {v0}, Ljava/lang/Object;-><init>()V
+###invoke-static 71
+    invoke-static {}, Landroid/os/Parcel;->obtain()Landroid/os/Parcel;
+###invoke-interface 72
+    invoke-interface {v1, v2, v0, v3, v4}, Landroid/os/IBinder;->transact(ILandroid/os/Parcel;Landroid/os/Parcel;I)Z
+###unused_73 73
+
+###invoke-virtual/range 74
+    invoke-virtual {v19..v21}, Test2.method5:(IIII)V
+###invoke-super/range 75
+    invoke-super {v1},java.io.FilterOutputStream.close:()V
+###invoke-direct/range 76
+    invoke-direct/range {v19..21},java.lang.Object.<init>:()V
+###invoke-static/range 77
+    invoke-static/range {v19..21},java.lang.Integer.parseInt:( Ljava/lang/String;)I
+###invoke-interface-range 78
+    invoke-interface {v1..v4}, mwfw.IReceivingProtocolAdapter.receivePackage:(ILjava/lang/String;Ljava/io/InputStream;)Z
+###unused_79 79
+
+###unused_7A 7A
+
+###neg-int 7B
+    neg-int v0,v1
+###not-int 7C
+    not-int v0,v1
+###neg-long 7D
+    neg-long  v0,v1
+###not-long 7E
+    not-long v0,v1
+###neg-float 7F
+    neg-float v0, v1
+###neg-double 80
+    neg-double v0,v1
+###int-to-long 81
+    int-to-long v0, v1
+###int-to-float 82
+    int-to-float v0, v1
+###int-to-double 83
+    int-to-double v0, v1
+###long-to-int 84
+    long-to-int v0, v1
+###long-to-float 85
+    long-to-float v0, v1
+###long-to-double 86
+    long-to-double v0, v1
+###float-to-int 87
+    float-to-int v0, v1
+###float-to-long 88
+    float-to-long v0, v1
+###float-to-double 89
+    float-to-double v0, v1
+###double-to-int 8A
+    double-to-int v0, v1
+###double-to-long 8B
+    double-to-long v0, v1
+###double-to-float 8C
+    double-to-float v0, v1
+###int-to-byte 8D
+    int-to-byte v0, v0
+###int-to-char 8E
+    int-to-char v0, v0
+###int-to-short 8F
+    int-to-short v0, v0
+###add-int 90
+    add-int v0, v1, v2
+###sub-int 91
+    sub-int v0, v1, v2
+###mul-int 92
+    mul-int v0, v1, v2
+###div-int 93
+    div-int v0, v1, v2
+###rem-int 94
+    rem-int v0, v1, v2
+###and-int 95
+    and-int v0, v1, v2
+###or-int 96
+    or-int v0, v1, v2
+###xor-int 97
+    xor-int v0, v1, v2
+###shl-int 98
+    shl-int v0, v1, v2
+###shr-int 99
+    shr-int v0, v1, v2
+###ushr-int 9A
+    ushr-long v0, v1, v2
+###add-long 9B
+    add-long v0, v1, v2
+###sub-long 9C
+    sub-long v0, v1, v2
+###mul-long 9D
+    mul-long v0, v1, v2
+###div-long 9E
+    div-long v0, v1, v2
+###rem-long 9F
+    rem-long v0, v1, v2
+###and-long A0
+    and-long v0, v1, v2
+###or-long A1
+    or-long v0, v1, v2
+###xor-long A2
+    xor-long v0, v1, v2
+###shl-long A3
+    shl-long v0, v1, v2
+###shr-long A4
+    shr-long v0, v1, v2
+###ushr-long A5
+    ushr-long v0, v1, v2
+###add-float A6
+    add-float v0, v1, v2
+###sub-float A7
+    sub-float v0, v1, v2
+###mul-float A8
+    mul-float v0, v1, v2
+###div-float A9
+    mul-float v0, v1, v2
+###rem-float AA
+    rem-float v0, v1, v2
+###add-double AB
+    add-double v0, v1, v2
+###sub-double AC
+    sub-double v0, v1, v2
+###mul-double AD
+    mul-double v0, v1, v2
+###div-double AE
+    div-double v0, v1, v2
+###rem-double AF
+    rem-double v0, v1, v2
+###add-int/2addr B0
+    add-int/2addr v0,v1
+###sub-int/2addr B1
+    sub-int/2addr v0,v1
+###mul-int/2addr B2
+    mul-int/2addr v0,v1
+###div-int/2addr B3
+    div-int/2addr v0,v1
+###rem-int/2addr B4
+    rem-int/2addr v0,v1
+###and-int/2addr B5
+    and-int/2addr v0,v1
+###or-int/2addr B6
+    or-int/2addr v0,v1
+###xor-int/2addr B7
+    xor-int/2addr v0,v1
+###shl-int/2addr B8
+    shl-int/2addr v0,v1
+###shr-int/2addr B9
+    shr-int/2addr v0,v1
+###ushr-int/2addr BA
+    ursh-int/2addr v0,v1
+###add-long/2addr BB
+    add-long/2addr v0,v1
+###sub-long/2addr BC
+    sub-long/2addr v0,v1
+###mul-long/2addr BD
+    mul-long/2addr v0,v1
+###div-long/2addr BE
+    div-long/2addr v0,v1
+###rem-long/2addr BF
+    rem-long/2addr v0,v1
+###and-long/2addr C0
+    and-long/2addr v0,v1
+###or-long/2addr C1
+    or-long/2addr v0,v1
+###xor-long/2addr C2
+    xor-long/2addr v0,v1
+###shl-long/2addr C3
+    shl-long/2addr v0,v1
+###shr-long/2addr C4
+    shr-long/2addr v0,v1
+###ushr-long/2addr C5
+    ushr-long/2addr v0,v1
+###add-float/2addr C6
+    add-float/2addr v0,v1
+###sub-float/2addr C7
+    sub-float/2addr v0,v1
+###mul-float/2addr C8
+    mul-float/2addr v0,v1
+###div-float/2addr C9
+    div-float/2addr v0,v1
+###rem-float/2addr CA
+    rem-float/2addr v0,v1
+###add-double/2addr CB
+    add-double/2addr v0,v1
+###sub-double/2addr CC
+    sub-double/2addr v0,v1
+###mul-double/2addr CD
+    mul-double/2addr v0,v1
+###div-double/2addr CE
+    div-double/2addr v0,v1
+###rem-double/2addr CF
+    rem-double/2addr v0,v1
+###add-int/lit16 D0
+    add-int/lit16 v0, v1, 0x1
+###sub-int/lit16 D1
+    sub-int/lit16 v0, v1, 0x1
+###mul-int/lit16 D2
+    mul-int/lit16 v1, v0, 0x2
+###div-int/lit16 D3
+    div-int/lit16 v1, v0, 0x2
+###rem-int/lit16 D4
+    rem-int/lit16 v1, v0, 0x2
+###and-int/lit16 D5
+    and-int/lit16 v1, v0, 0x1
+###or-int/lit16 D6
+    or-int/lit16 v1, v0, 0x1
+###xor-int/lit16 D7
+    xor-int/lit16 v1, v0, 0x1
+###add-int/lit8 D8
+    add-int/lit8 v0, v1, 0x1
+###sub-int/lit8 D9
+    sub-int/lit8 v0, v1, 0x1
+###mul-int/lit8 DA
+    mul-int/lit8 v0, v1, 0x2
+###div-int/lit8 DB
+    div-int/lit8 v0, v1, 0x2
+###rem-int/lit8 DC
+    and-int/lit8 v0, v1, 0x2
+###and-int/lit8 DD
+    and-int/lit8 v0, v1, 0x1
+###or-int/lit8 DE
+    or-int/lit8 v0, v1, 0x1
+###xor-int/lit8 DF
+    xor-int/lit8 v0, v1, 0x1
+###shl-int/lit8 E0
+    shl-int/lit8 v0, v1, 0x1
+###shr-int/lit8 E1
+    sh3-int/lit8 v0, v1, 0x1
+###ushr-int/lit8 E2
+    ushr-int/lit8 v0, v1, 0x1
+###unused_E3 E3
+
+###unused_E4 E4
+
+###unused_E5 E5
+
+###unused_E6 E6
+
+###unused_E7 E7
+
+###unused_E8 E8
+
+###unused_E9 E9
+
+###unused_EA EA
+
+###unused_EB EB
+
+###unused_EC EC
+
+###unused_ED ED
+
+###unused_EE EE
+
+###unused_EF EF
+
+###unused_F0 F0
+
+###unused_F1 F1
+
+###unused_F2 F2
+
+###unused_F3 F3
+
+###unused_F4 F4
+
+###unused_F5 F5
+
+###unused_F6 F6
+
+###unused_F7 F7
+
+###unused_F8 F8
+
+###unused_F9 F9
+
+###invoke-polymorphic/range FB
+
+###invoke-custom FC
+
+###invoke-custom/range FD
+
+###const-method-handle FE
+
+###const-method-type FF
