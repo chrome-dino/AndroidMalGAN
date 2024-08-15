@@ -2,9 +2,10 @@ import argparse
 import ngram_inject
 import opcode_ngram_model
 import opcode_ngram_feature_extract
-
+import subprocess
 
 def extract():
+    # subprocess.run(['sh', './unpack.sh'])
     opcode_ngram_feature_extract.extract()
 
 
