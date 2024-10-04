@@ -1,0 +1,8 @@
+LICENSE
+README.md
+setup.py
+AndroidMalGAN/AndroidMalGAN.egg-info/PKG-INFO
+AndroidMalGAN/AndroidMalGAN.egg-info/SOURCES.txt
+AndroidMalGAN/AndroidMalGAN.egg-info/dependency_links.txt
+AndroidMalGAN/AndroidMalGAN.egg-info/requires.txt
+AndroidMalGAN/AndroidMalGAN.egg-info/top_level.txt
