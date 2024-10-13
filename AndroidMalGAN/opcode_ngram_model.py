@@ -48,8 +48,8 @@ SAVED_BEST_MODEL_PATH = 'opcode_ngram_malgan_best.pth'
 def train_ngram_model(config, blackbox=None, bb_name=''):
     # num_epochs = 10000, batch_size = 150, learning_rate = 0.001, l2_lambda = 0.01, g_noise = 0, g_input = 0, g_1 = 0, g_2 = 0, g_3 = 0, c_input = 0, c_1 = 0, c_2 = 0, c_3 = 0
 
-    classifier_params = {'input': config['c_input'], 'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
-    generator_params = {'input': config['g_input'], 'l1': config['g_1'], 'l2': config['g_2'], 'l3': config['g_3'], 'noise': config['g_noise']}
+    classifier_params = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
+    generator_params = {'l1': config['g_1'], 'l2': config['g_2'], 'l3': config['g_3'], 'noise': config['g_noise']}
     discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_opcode_ngram_model(config['lr_gen'], config['l2_lambda_gen'], config['lr_disc'], config['l2_lambda_disc'], classifier_params, generator_params)
     discriminator = discriminator.to(DEVICE)
     generator = generator.to(DEVICE)
@@ -440,9 +440,9 @@ def validation(generator, discriminator, malware, lossfun):
 def create_opcode_ngram_model(learning_rate_gen, l2lambda_gen, learning_rate_disc, l2lambda_disc, classifier, generator):
     # build the model
     # blackbox = BlackBoxDetector()
-    discriminator = NgramClassifier(d_input_dim=classifier['input'], l2=classifier['l2'], l3=classifier['l3'],
+    discriminator = NgramClassifier(l2=classifier['l2'], l3=classifier['l3'],
                                     l4=classifier['l4'])
-    generator = NgramGenerator(input_layers=generator['input'], l2=generator['l2'], l3=generator['l3'],
+    generator = NgramGenerator(l2=generator['l2'], l3=generator['l3'],
                                l4=generator['l4'], noise_dims=generator['noise'])
 
     # loss function
@@ -665,15 +665,13 @@ def train():
 
 
     tune_config = {
-        "g_input": tune.choice([2 ** i for i in range(9)]),
-        "g_noise": tune.choice([2 ** i for i in range(9)]),
-        "g_1": tune.choice([2 ** i for i in range(9)]),
-        "g_2": tune.choice([2 ** i for i in range(9)]),
-        "g_3": tune.choice([2 ** i for i in range(9)]),
-        "c_input": tune.choice([2 ** i for i in range(9)]),
-        "c_1": tune.choice([2 ** i for i in range(9)]),
-        "c_2": tune.choice([2 ** i for i in range(9)]),
-        "c_3": tune.choice([2 ** i for i in range(9)]),
+        "g_noise": tune.choice([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]),
+        "g_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+        "g_2": tune.choice([1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000]),
+        "g_3": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+        "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+        "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
+        "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
         "lr_gen": tune.uniform(0.001, 0.1),
         "lr_disc": tune.uniform(0.001, 0.1),
         "l2_lambda_gen": tune.uniform(0.001, 0.1),
