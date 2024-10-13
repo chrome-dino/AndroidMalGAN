@@ -1,6 +1,7 @@
 import configparser
 import copy
 
+from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -21,12 +22,10 @@ import os
 
 matplotlib_inline.backend_inline.set_matplotlib_formats('svg')
 
-config = configparser.ConfigParser()
-config.read("settings.ini")
+configs = configparser.ConfigParser()
+configs.read("settings.ini")
 
-BB_MODELS = [{'name': 'rf', 'path': 'rf_model.pth'},
-{'name': 'dt', 'path': 'dt_model.pth'},
-             {'name': 'svm', 'path': 'svm_model.pth'}]
+BB_MODELS = [{'name': 'rf', 'path': 'rf_model.pth'}, {'name': 'dt', 'path': 'dt_model.pth'}, {'name': 'svm', 'path': 'svm_model.pth'}]
 
 # FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
 # LEARNING_RATE = 0.0002
@@ -46,9 +45,12 @@ SAVED_BEST_MODEL_PATH = 'opcode_ngram_malgan_best.pth'
 # BB_SAVED_MODEL_PATH = 'opcode_ngram_blackbox.pth'
 
 
-def train_ngram_model(blackbox, bb_name):
-    discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_opcode_ngram_model(LEARNING_RATE,
-                                                                                                 L2_LAMBDA)
+def train_ngram_model(config, blackbox=None, bb_name=''):
+    # num_epochs = 10000, batch_size = 150, learning_rate = 0.001, l2_lambda = 0.01, g_noise = 0, g_input = 0, g_1 = 0, g_2 = 0, g_3 = 0, c_input = 0, c_1 = 0, c_2 = 0, c_3 = 0
+
+    classifier_params = {'input': config['c_input'], 'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
+    generator_params = {'input': config['g_input'], 'l1': config['g_1'], 'l2': config['g_2'], 'l3': config['g_3'], 'noise': config['g_noise']}
+    discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_opcode_ngram_model(config['lr_gen'], config['l2_lambda_gen'], config['lr_disc'], config['l2_lambda_disc'], classifier_params, generator_params)
     discriminator = discriminator.to(DEVICE)
     generator = generator.to(DEVICE)
     # with open('malware.csv') as f:
@@ -97,7 +99,7 @@ def train_ngram_model(blackbox, bb_name):
     data_tensor_benign = torch.tensor(data_benign).float()
     data_tensor_malware = torch.tensor(data_malware).float()
     # partition = [.8, .1, .1]
-    partition = [.9, .1]
+    partition = [.8, .2]
     # use scikitlearn to split the data
     train_data_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
         data_tensor_benign, labels_benign, test_size=partition[1])
@@ -133,6 +135,9 @@ def train_ngram_model(blackbox, bb_name):
     # best_loss = float('inf')
     last_loss = float('inf')
     early_stoppage_counter = 0
+
+
+
     losses = torch.zeros((NUM_EPOCHS, 2))
     disDecs = np.zeros((NUM_EPOCHS, 2))  # disDecs = discriminator decisions
     print('Training MalGAN Model: ' + bb_name)
@@ -140,8 +145,8 @@ def train_ngram_model(blackbox, bb_name):
         # start = 0
         # for step in range(data_tensor_malware.shape[0] // BATCH_SIZE):
         # for X, y in train_loader_benign:
-        mal_idx = np.random.randint(0, train_data_malware.shape[0], BATCH_SIZE)
-        ben_idx = np.random.randint(0, train_data_benign.shape[0], BATCH_SIZE)
+        mal_idx = np.random.randint(0, train_data_malware.shape[0], config['batch_size'])
+        ben_idx = np.random.randint(0, train_data_benign.shape[0], config['batch_size'])
         malware = train_data_malware[mal_idx]
         benign = train_data_malware[ben_idx]
 
@@ -245,7 +250,7 @@ def train_ngram_model(blackbox, bb_name):
         ### ---------------- Train the generator ---------------- ###
 
         # create fake images and compute loss
-        mal_idx = np.random.randint(0, train_data_malware.shape[0], BATCH_SIZE)
+        mal_idx = np.random.randint(0, train_data_malware.shape[0], config['batch_size'])
         malware = train_data_malware[mal_idx]
 
 
@@ -264,7 +269,7 @@ def train_ngram_model(blackbox, bb_name):
 
         # with torch.no_grad():
         pred_malware = discriminator(binarized_gen_malware_logical_or)
-        benign_labels = torch.ones(BATCH_SIZE, 1).to(DEVICE)
+        benign_labels = torch.ones(config['batch_size'], 1).to(DEVICE)
 
         # gen_malware = torch.where(malware >= 1, 1.0, gen_malware)
         # compute and collect loss and accuracy
@@ -319,11 +324,35 @@ def train_ngram_model(blackbox, bb_name):
             # best_epoch = e
 
             # print out a status message
+
+        # val_loss = 0.0
+        # val_steps = 0
+        # total = 0
+        # correct = 0
+        # for i, data in enumerate(valloader, 0):
+        #     with torch.no_grad():
+        #         inputs, labels = data
+        #         inputs, labels = inputs.to(device), labels.to(device)
+        #
+        #         outputs = net(inputs)
+        #         _, predicted = torch.max(outputs.data, 1)
+        #         total += labels.size(0)
+        #         correct += (predicted == labels).sum().item()
+        #
+        #         loss = criterion(outputs, labels)
+        #         val_loss += loss.cpu().numpy()
+        #         val_steps += 1
+        #
+        # train.report(
+        #     {"loss": val_loss / val_steps, "accuracy": correct / total}
+        # )
+        train.report(d_loss=disc_loss.item(), g_loss=gen_loss.item())
+
         if (e + 1) % 1000 == 0:
             # gen_loss, disc_loss = validation(generator, discriminator, test_data_malware, lossfun)
             # msg = f'Gen loss: {str(gen_loss)} / Disc loss: {str(disc_loss)}'
             # sys.stdout.write('\r' + msg + '\n')
-            msg = f'Finished epoch {e + 1}/{NUM_EPOCHS}'
+            msg = f'Finished epoch {e + 1}/{config["num_epochs"]}'
             sys.stdout.write('\r' + msg)
 
             # start = start + BATCH_SIZE
@@ -353,7 +382,40 @@ def train_ngram_model(blackbox, bb_name):
     plt.close(fig)
     # plt.show()
 
-    return losses, generator, discriminator, disDecs, test_data_malware
+    torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
+    # diff = False
+    # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
+    #     if p1.data.ne(p2.data).sum() > 0:
+    #         diff = True
+    #         break
+    # if diff:
+    #     print('models are different!')
+    # else:
+    #     print('models are same!')
+    print('/////////////////////////////////////////////////////////////')
+    # print(f'Generator model saved to: {SAVED_MODEL_PATH}')
+    print(f'Testing with {str(NOISE)} noise inputs')
+    # print(f'Testing best performing model (epoch: {str(best_epoch)})')
+    # best_model = NgramGenerator(noise_dims=NOISE)
+    # best_model.load_state_dict(torch.load(SAVED_BEST_MODEL_PATH))
+    # validate(best_model, blackbox, test_data_malware)
+    # print('############################################################')
+    print('Testing final model')
+    validate(generator, blackbox, bb_name, test_data_malware)
+    test_data_malware = test_data_malware.to(DEVICE)
+    results = discriminator(test_data_malware)
+    # print(results)
+    mal = 0
+    ben = 0
+    for result in results:
+        if result[0] > 0.5:
+            ben += 1
+        else:
+            mal += 1
+    print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
+    print('##############################################################################')
+
+    return
 
 
 def validation(generator, discriminator, malware, lossfun):
@@ -375,35 +437,37 @@ def validation(generator, discriminator, malware, lossfun):
     return gen_loss, disc_loss
 
 
-def create_opcode_ngram_model(learning_rate, l2lambda):
+def create_opcode_ngram_model(learning_rate_gen, l2lambda_gen, learning_rate_disc, l2lambda_disc, classifier, generator):
     # build the model
     # blackbox = BlackBoxDetector()
-    discriminator = NgramClassifier()
-    generator = NgramGenerator(noise_dims=NOISE)
+    discriminator = NgramClassifier(d_input_dim=classifier['input'], l2=classifier['l2'], l3=classifier['l3'],
+                                    l4=classifier['l4'])
+    generator = NgramGenerator(input_layers=generator['input'], l2=generator['l2'], l3=generator['l3'],
+                               l4=generator['l4'], noise_dims=generator['noise'])
 
     # loss function
     # lossfun = nn.BCEWithLogitsLoss()
     lossfun = nn.BCELoss()
     # optimizer
-    disc_optimizer = torch.optim.Adam(discriminator.parameters(), lr=learning_rate, weight_decay=l2lambda, betas=(.9, .999))
-    gen_optimizer = torch.optim.Adam(generator.parameters(), lr=learning_rate, weight_decay=l2lambda, betas=(.9, .999))
+    disc_optimizer = torch.optim.Adam(discriminator.parameters(), lr=learning_rate_disc, weight_decay=l2lambda_disc, betas=(.9, .999))
+    gen_optimizer = torch.optim.Adam(generator.parameters(), lr=learning_rate_gen, weight_decay=l2lambda_gen, betas=(.9, .999))
 
     return discriminator, generator, lossfun, disc_optimizer, gen_optimizer
 
 
 class NgramClassifier(nn.Module):
-    def __init__(self, d_input_dim=350):
+    def __init__(self, d_input_dim=350, l2=700, l3=450, l4=325):
         super(NgramClassifier, self).__init__()
 
         # input layer
-        self.input = nn.Linear(d_input_dim, d_input_dim*2)
+        self.input = nn.Linear(d_input_dim, l2)
         # input layer
-        self.fc1 = nn.Linear(self.input.out_features, self.input.out_features//2 + 100)
+        self.fc1 = nn.Linear(l2, l3)
         # input layer
         # self.fc2 = nn.Linear(self.fc1.out_features, self.fc1.out_features)
-        self.fc3 = nn.Linear(self.fc1.out_features, self.fc1.out_features//2 + 100)
+        self.fc3 = nn.Linear(l3, l4)
         # output layer
-        self.output = nn.Linear(self.fc3.out_features, 1)
+        self.output = nn.Linear(l4, 1)
         # batch norm
         self.batch_norm1 = torch.nn.BatchNorm1d(self.fc1.out_features)
         # self.batch_norm2 = torch.nn.BatchNorm1d(self.fc2.out_features)
@@ -454,7 +518,7 @@ class NgramClassifier(nn.Module):
 
 
 class NgramGenerator(nn.Module):
-    def __init__(self, noise_dims=70, input_layers=350, g_output_dim=350):
+    def __init__(self, noise_dims=70, input_layers=350, l2=840, l3=1480, l4=740):
         super(NgramGenerator, self).__init__()
 
         # amount of noise to add
@@ -464,16 +528,16 @@ class NgramGenerator(nn.Module):
         # input layer
         # self.input = nn.Linear(self.noise_dims + self.input_layers, 75)
 
-        self.input = nn.Linear(self.input_layers, self.input_layers*2)
+        self.input = nn.Linear(self.input_layers, l2)
         # input layer
-        self.fc1 = nn.Linear(self.input.out_features, self.input.out_features*2-200)
+        self.fc1 = nn.Linear(l2, l3)
         # # input layer
         # self.fc2 = nn.Linear(self.fc1.out_features, self.fc1.out_features)
 
-        self.fc3 = nn.Linear(self.fc1.out_features, self.fc1.out_features//2)
+        self.fc3 = nn.Linear(l3, l4)
 
         # output layer
-        self.output = nn.Linear(self.fc3.out_features, g_output_dim)
+        self.output = nn.Linear(l4, input_layers)
 
         # self.double()
         self.batch_norm1 = torch.nn.BatchNorm1d(self.fc1.out_features)
@@ -481,15 +545,10 @@ class NgramGenerator(nn.Module):
         self.batch_norm3 = torch.nn.BatchNorm1d(self.fc3.out_features)
 
 
-
         # self.input = nn.Linear(self.input_layers, self.input_layers)
         # self.fc1 = nn.Linear(self.input.out_features, self.input.out_features)
         # self.fc3 = nn.Linear(self.fc1.out_features, self.fc1.out_features)
         # self.output = nn.Linear(self.fc3.out_features, g_output_dim)
-
-
-
-
 
 
     def forward(self, x):
@@ -583,8 +642,7 @@ def validate(generator, blackbox, bb_name, data_malware):
     results = blackbox.predict_proba(gen_malware)
     # if svm
     if bb_name == 'svm':
-        results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in
-               results]
+        results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
     # results = torch.where(results > 0.5, True, False)
     mal = 0
     ben = 0
@@ -597,6 +655,7 @@ def validate(generator, blackbox, bb_name, data_malware):
 
 
 def train():
+    os.chdir('./AndroidMalGAN')
     if TRAIN_BLACKBOX:
         train_blackbox()
     # blackbox = BlackBoxDetector()
@@ -604,45 +663,127 @@ def train():
     # blackbox.eval()
     # blackbox = torch.load('dt_model.pth')
 
+
+    tune_config = {
+        "g_input": tune.choice([2 ** i for i in range(9)]),
+        "g_noise": tune.choice([2 ** i for i in range(9)]),
+        "g_1": tune.choice([2 ** i for i in range(9)]),
+        "g_2": tune.choice([2 ** i for i in range(9)]),
+        "g_3": tune.choice([2 ** i for i in range(9)]),
+        "c_input": tune.choice([2 ** i for i in range(9)]),
+        "c_1": tune.choice([2 ** i for i in range(9)]),
+        "c_2": tune.choice([2 ** i for i in range(9)]),
+        "c_3": tune.choice([2 ** i for i in range(9)]),
+        "lr_gen": tune.uniform(0.001, 0.1),
+        "lr_disc": tune.uniform(0.001, 0.1),
+        "l2_lambda_gen": tune.uniform(0.001, 0.1),
+        "l2_lambda_disc": tune.uniform(0.001, 0.1),
+        "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
+    }
+
+    scheduler = ASHAScheduler(
+        metric="loss",
+        mode="min",
+        max_t=NUM_EPOCHS,
+        grace_period=1,
+        reduction_factor=2,
+    )
+
     for bb_model in BB_MODELS:
         blackbox = torch.load(bb_model['path'])
         blackbox = blackbox.to(DEVICE)
-        losses, ngram_generator, discriminator, disDecs, test_data_malware = train_ngram_model(blackbox, bb_model['name'])
+
+        # result = tune.run(
+        #     partial(train_ngram_model, data_dir=data_dir),
+        #     # resources_per_trial={"cpu": 2, "gpu": gpus_per_trial},
+        #     config=tune_config,
+        #     num_samples=num_samples,
+        #     scheduler=scheduler,
+        # )
+        result = tune.run(
+            partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']),
+            config=tune_config,
+            num_samples=10000,
+            scheduler=scheduler,
+            resources_per_trial={"cpu": 2, "gpu": 1},
+        )
+
+        # losses, ngram_generator, discriminator, disDecs, test_data_malware = (
+        #     train_ngram_model(blackbox=blackbox, bb_name=bb_model['name'], num_epochs=10000, batch_size=150,
+        #                       learning_rate=0.001, l2_lambda=0.01, g_noise=0, g_input=0, g_1=0, g_2=0, g_3=0,
+        #                       c_input=0, c_1=0, c_2=0, c_3=0)
+        # )
+
+        best_trial = result.get_best_trial("g_loss", "min", "last")
+        best_config_gen = result.get_best_config(metric="g_loss", mode="min")
+        best_config_disc = result.get_best_config(metric="d_loss", mode="min")
+
+
+        print(f"Best trial config: {best_trial.config}")
+        print(f"Best trial final validation loss: {best_trial.last_result['loss']}")
+        print(f"Best trial final validation accuracy: {best_trial.last_result['accuracy']}")
+
+        print("Best config gen:", best_config_gen)
+        print("Best config disc:", best_config_disc)
+
+
+        # best_trained_model = NgramGenerator(best_trial.config["l1"], best_trial.config["l2"])
+        # device = "cpu"
+        # if torch.cuda.is_available():
+        #     device = "cuda:0"
+        #     if gpus_per_trial > 1:
+        #         best_trained_model = nn.DataParallel(best_trained_model)
+        # best_trained_model.to(device)
+        #
+        # best_checkpoint = result.get_best_checkpoint(trial=best_trial, metric="accuracy", mode="max")
+        # with best_checkpoint.as_directory() as checkpoint_dir:
+        #     data_path = Path(checkpoint_dir) / "data.pkl"
+        #     with open(data_path, "rb") as fp:
+        #         best_checkpoint_data = pickle.load(fp)
+        #
+        #     best_trained_model.load_state_dict(best_checkpoint_data["net_state_dict"])
+        #     test_acc = test_accuracy(best_trained_model, device)
+        #     print("Best trial test set accuracy: {}".format(test_acc))
+
+
+
+
+
         # print(f'\nLosses: {str(losses)}')
         # print(f'Training Accuracy: {str(trainAcc)}')
         # print(f'Test Accuracy: {str(testAcc)}')
         # print(disDecs)
         # torch.save(best_model.state_dict(), SAVED_BEST_MODEL_PATH)
-        torch.save(ngram_generator.state_dict(), SAVED_MODEL_PATH + bb_model['name'] + '.pth')
-        # diff = False
-        # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
-        #     if p1.data.ne(p2.data).sum() > 0:
-        #         diff = True
-        #         break
-        # if diff:
-        #     print('models are different!')
-        # else:
-        #     print('models are same!')
-        print('/////////////////////////////////////////////////////////////')
-        # print(f'Generator model saved to: {SAVED_MODEL_PATH}')
-        print(f'Testing with {str(NOISE)} noise inputs')
-        # print(f'Testing best performing model (epoch: {str(best_epoch)})')
-        # best_model = NgramGenerator(noise_dims=NOISE)
-        # best_model.load_state_dict(torch.load(SAVED_BEST_MODEL_PATH))
-        # validate(best_model, blackbox, test_data_malware)
-        # print('############################################################')
-        print('Testing final model')
-        validate(ngram_generator, blackbox, bb_model['name'], test_data_malware)
-        test_data_malware = test_data_malware.to(DEVICE)
-        results = discriminator(test_data_malware)
-        # print(results)
-        mal = 0
-        ben = 0
-        for result in results:
-            if result[0] > 0.5:
-                ben += 1
-            else:
-                mal += 1
-        print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
-        print('##############################################################################')
+        # torch.save(ngram_generator.state_dict(), SAVED_MODEL_PATH + bb_model['name'] + '.pth')
+        # # diff = False
+        # # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
+        # #     if p1.data.ne(p2.data).sum() > 0:
+        # #         diff = True
+        # #         break
+        # # if diff:
+        # #     print('models are different!')
+        # # else:
+        # #     print('models are same!')
+        # print('/////////////////////////////////////////////////////////////')
+        # # print(f'Generator model saved to: {SAVED_MODEL_PATH}')
+        # print(f'Testing with {str(NOISE)} noise inputs')
+        # # print(f'Testing best performing model (epoch: {str(best_epoch)})')
+        # # best_model = NgramGenerator(noise_dims=NOISE)
+        # # best_model.load_state_dict(torch.load(SAVED_BEST_MODEL_PATH))
+        # # validate(best_model, blackbox, test_data_malware)
+        # # print('############################################################')
+        # print('Testing final model')
+        # validate(ngram_generator, blackbox, bb_model['name'], test_data_malware)
+        # test_data_malware = test_data_malware.to(DEVICE)
+        # results = discriminator(test_data_malware)
+        # # print(results)
+        # mal = 0
+        # ben = 0
+        # for result in results:
+        #     if result[0] > 0.5:
+        #         ben += 1
+        #     else:
+        #         mal += 1
+        # print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
+        # print('##############################################################################')
     print('Finished!')
