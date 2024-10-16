@@ -1,314 +1,789 @@
-from __future__ import print_function, division
+import configparser
+import copy
 
-from keras.layers import Input, Dense, Activation
-from keras.layers.merge import Maximum, Concatenate
-from keras.models import Model
-
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.neural_network import MLPClassifier
+from functools import partial
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve
+from train_blackbox import train_blackbox
+from sklearn.preprocessing import RobustScaler, MinMaxScaler
 
-import tensorflow.compat.v1 as tf
+from ray import train, tune
+from ray.tune.schedulers import ASHAScheduler
+import ray
 
-tf.compat.v1.disable_eager_execution()  # work with tensorflow 2.0
-from tensorflow.keras.optimizers import Adam
-from opcode_ngram_model import Model as Classifier
-import pickle
-from sklearn.datasets import load_svmlight_file
-
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import pandas as pd
 import numpy as np
-import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib_inline
 
-sns.set(style="white")
+import sys
+import os
 
-"""The test data is a list of 3435 malware examples, each with 3514 API features."""
+matplotlib_inline.backend_inline.set_matplotlib_formats('svg')
 
-seed_dict = pickle.load(open('feat_dict.pickle', 'rb'), encoding='latin1')
-features = []
-sha1 = []
-for key in seed_dict:
-    seed_dict[key] = seed_dict[key].toarray()[0]
-    features.append(seed_dict[key])
-    sha1.append(key)
-feed_feat = np.stack(features)
+configs = configparser.ConfigParser()
+configs.read("settings.ini")
 
-"""The training dataset contains 13190 samples, each with 3514 API features. The first 6896 are malware example, and the last 6294 are benign examples."""
+BB_MODELS = [{'name': 'rf', 'path': 'rf_model.pth'}, {'name': 'dt', 'path': 'dt_model.pth'},
+             {'name': 'svm', 'path': 'svm_model.pth'}]
 
+# FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
+# LEARNING_RATE = 0.0002
+LEARNING_RATE = 0.001
+EARLY_STOPPAGE_THRESHOLD = 100
+BB_LEARNING_RATE = 0.001
+NUM_EPOCHS = 1000
+L2_LAMBDA = 0.01
+BB_L2_LAMBDA = 0.01
+BATCH_SIZE = 150
+NOISE = 0
+TRAIN_BLACKBOX = False
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DEVICE_CPU = torch.device('cpu')
+SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/opcode_ngram_'
+SAVED_BEST_MODEL_PATH = 'opcode_ngram_malgan_best.pth'
 
-class MalGAN():
-    def __init__(self, model_name):
-        self.apifeature_dims = 3514
-        self.z_dims = 100  # noise appended at the end of example
-        self.model_name = model_name
+MALWARE_CSV = '/home/dsu/Documents/AndroidMalGAN/malware.csv'
+BENIGN_CSV = '/home/dsu/Documents/AndroidMalGAN/benign.csv'
+# BB_SAVED_MODEL_PATH = 'opcode_ngram_blackbox.pth'
 
-        self.hide_layers = 256
-        self.generator_layers = [self.apifeature_dims + self.z_dims, self.hide_layers, self.apifeature_dims]
-        self.substitute_detector_layers = [self.apifeature_dims, self.hide_layers, 1]
-        self.blackbox, self.sess = self.build_blackbox_detector(self.model_name)
-        self.optimizer = Adam(lr=0.001)
-
-        # Build and compile the substitute_detector
-        self.substitute_detector = self.build_substitute_detector()
-        self.substitute_detector.compile(loss='binary_crossentropy', optimizer=self.optimizer, metrics=['accuracy'])
-
-        # Build the generator
-        self.generator = self.build_generator()
-
-        # The generator takes malware and noise as input and generates adversarial malware examples
-        example = Input(shape=(self.apifeature_dims,))
-        noise = Input(shape=(self.z_dims,))
-        input = [example, noise]
-        malware_examples = self.generator(input)
-
-        # For the combined model we will only train the generator
-        self.substitute_detector.trainable = False
-
-        # The discriminator takes generated images as input and determines validity
-        validity = self.substitute_detector(malware_examples)
-
-        # The combined model  (stacked generator and substitute_detector)
-        self.combined = Model(input, validity)
-        self.combined.compile(loss='binary_crossentropy', optimizer=self.optimizer)
-
-    def build_generator(self):
-
-        example = Input(shape=(self.apifeature_dims,))
-        noise = Input(shape=(self.z_dims,))
-        x = Concatenate(axis=1)([example, noise])
-        for dim in self.generator_layers[1:]:
-            x = Dense(dim)(x)
-            x = Activation(activation='sigmoid')(x)
-        x = Maximum()([example, x])
-        generator = Model([example, noise], x, name='generator')
-        generator.summary()
-        return generator
-
-    def build_substitute_detector(self):
-
-        input = Input(shape=(self.substitute_detector_layers[0],))
-        x = input
-        for dim in self.substitute_detector_layers[1:]:
-            x = Dense(dim)(x)
-            x = Activation(activation='sigmoid')(x)
-        substitute_detector = Model(input, x, name='substitute_detector')
-        substitute_detector.summary()
-        return substitute_detector
-
-    def build_blackbox_detector(self, model_name):
-
-        PATH = "adv_trained/{}.ckpt".format(model_name)
-        # Clear the current graph in each run, to avoid variable duplication
-        tf.reset_default_graph()
-        model = Classifier()
-        saver = tf.train.Saver()
-        sess = tf.Session()
-        sess.run(tf.global_variables_initializer())
-        sess.run(tf.local_variables_initializer())
-
-        saver.restore(sess, PATH)
-        print("load model from:", PATH)
-
-        return model, sess
-
-    def train(self, epochs, batch_size):
-
-        model = self.blackbox
-        sess = self.sess
-
-        # Load test dataset (all malware)
-        seed_dict = pickle.load(open('feat_dict.pickle', 'rb'), encoding='latin1')
-        features = []
-        sha1 = []
-        dist_dict = {}  # [key]: hash [value]: L0 distance
-        for key in seed_dict:
-            seed_dict[key] = seed_dict[key].toarray()[0]
-            features.append(seed_dict[key])
-            sha1.append(key)
-        feed_feat = np.stack(features)
-        xtest_mal, ytest_mal = feed_feat, np.ones(len(feed_feat))
-
-        # Load training dataset
-        train_x, train_y = load_svmlight_file("train_data.libsvm",
-                                              n_features=3514,
-                                              multilabel=False,
-                                              zero_based=False,
-                                              query_id=False)
-
-        train_x = train_x.toarray()
-        xtrain_ben = train_x[6896:]
-        ytrain_ben = train_y[6896:]
-        xtrain_mal = train_x[0:6896]
-        ytrain_mal = train_y[0:6896]
-
-        # Since the training dataset is unbalanced, we randomly choose sample from benign dataset
-        # and add them to the end to make up the gap
-        idx = np.random.randint(0, xtrain_ben.shape[0], 6896 - 6294)
-        add_on = xtrain_ben[idx]
-        add_on_label = ytrain_ben[idx]
-        xtrain_ben = np.concatenate((xtrain_ben, add_on), axis=0)
-        ytrain_ben = np.concatenate((ytrain_ben, add_on_label), axis=0)
-
-        Test_TPR = []
-        d_loss_list, g_loss_list = [], []
-
-        for epoch in range(epochs):
-
-            # Each epoch goes through all the data in the training set
-            start = 0
-
-            for step in range(xtrain_mal.shape[0] // batch_size):
-                # ---------------------
-                #  Train substitute_detector
-                # ---------------------
-
-                xmal_batch = xtrain_mal[start: start + batch_size]
-                noise = np.random.uniform(0, 1, (batch_size, self.z_dims))
-
-                xben_batch = xtrain_ben[start: start + batch_size]
-                start = start + batch_size
-
-                # predict using blackbox detector
-                yben_batch = sess.run(model.y_pred,
-                                      feed_dict={model.x_input: xben_batch})
-
-                # Generate a batch of new malware examples
-                gen_examples = self.generator.predict([xmal_batch, noise])
-                ymal_batch = sess.run(model.y_pred,
-                                      feed_dict={model.x_input: np.ones(gen_examples.shape) * (gen_examples > 0.5)})
-
-                # Train the substitute_detector
-                d_loss_real = self.substitute_detector.train_on_batch(xben_batch, yben_batch)
-                d_loss_fake = self.substitute_detector.train_on_batch(gen_examples, ymal_batch)
-                d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
-
-                # ---------------------
-                #  Train Generator
-                # ---------------------
-
-                noise = np.random.uniform(0, 1, (batch_size, self.z_dims))
-                g_loss = self.combined.train_on_batch([xmal_batch, noise], np.zeros((batch_size, 1)))
-
-            # After each epoch, Evaluate evasion performance on the test dataset
-            # try different noise for 3 times
-            for j in range(3):
-                noise = np.random.uniform(0, 1, (xtest_mal.shape[0], self.z_dims))
-                gen_examples = self.generator.predict([xtest_mal, noise])
-
-                TPR = sess.run(model.accuracy,
-                               feed_dict={model.x_input: np.ones(gen_examples.shape) * (gen_examples > 0.5),
-                                          model.y_input: np.ones(gen_examples.shape[0], )})
-
-                Test_TPR.append(TPR)
-
-                transformed_to_bin = np.ones(gen_examples.shape) * (gen_examples > 0.5)
-
-                pred_y_label = sess.run(model.y_pred, feed_dict={model.x_input: np.ones(gen_examples.shape) * (gen_examples > 0.5)})
-
-                # remove successfully evaded malware examples from xtest_mal
-                i = 0
-                while i < pred_y_label.shape[0]:
-                    if pred_y_label[i] == 0:  # should be 1 but predict 0
-                        # print(sha1[i], xtrain_mal[i])
-                        # calculate L0 distance and put to dictionary
-                        L0 = np.sum(transformed_to_bin[i]) - np.sum(xtest_mal[i])  # insertion only
-                        dist_dict[sha1[i]] = L0  # [key]: hash [value]: L0 distance
-                        xtest_mal = np.delete(xtest_mal, i, 0)
-                        pred_y_label = np.delete(pred_y_label, i, 0)
-                        sha1 = sha1[:i] + sha1[i + 1:]
-                    else:
-                        i += 1
-
-                print("remaining malware examples:", xtest_mal.shape[0])
-                if xtest_mal.shape[0] == 0:
-                    break  # successful evade all
-
-            # Print and record the progress
-            print("[MalGAN] epoch(%d) [D loss: %f, acc.: %.2f%%] [G loss: %f]" % (epoch + 1, d_loss[0], 100 * d_loss[1], g_loss))
-            print("[Classifier] Test TPR on remaining test data: %f" % (Test_TPR[-1]))
-            d_loss_list.append(d_loss[0])
-            g_loss_list.append(g_loss)
-            if xtest_mal.shape[0] == 0:
-                break  # successful evade all
-
-        sess.close()
-
-        # AFTER all epochs
-        # Plot the progress --> loss
-        # d_loss_df = pd.DataFrame(dict(epoch =np.arange(1, len(d_loss_list)+1),\
-        #                               dataset = "d loss",\
-        #                               loss = np.asarray(d_loss_list, dtype=np.float32)))
-        # g_loss_df = pd.DataFrame(dict(epoch =np.arange(1, len(g_loss_list)+1),\
-        #                               dataset = "g loss",\
-        #                               loss = np.asarray(g_loss_list, dtype=np.float32)))
-
-        # loss_df = pd.concat([d_loss_df,g_loss_df], axis=0).reset_index(drop=True)      
-        # plt.figure()
-        # loss_plot = sns.lineplot(x = 'epoch', y = 'loss', hue ='dataset', data = loss_df)
-        # handles, labels = loss_plot.get_legend_handles_labels()
-        # loss_plot.legend(handles=handles, labels=labels)
-        # plt.show()
-        # fig = loss_plot.get_figure()
-        # fig.savefig("{}_loss".format(self.model_name))  # save loss plot
-
-        # get corresponding dataframe for different models
-        ERA = []
-        success_num = 0
-        # Calculate ERA for each L0 distance
-        for i in range(3515):  # 0 - 3514 features
-            for key in dist_dict:
-                if dist_dict[key] == i:
-                    success_num += 1
-            ERA.append((3435 - success_num) / 3435)
-
-        # report ERA if not completely evaded
-        if ERA[-1] != 0:
-            print("{} is not completely evaded after {} epochs. ERA = {}".format(self.model_name, epochs, ERA[-1]))
-
-        if self.model_name == 'baseline_checkpoint': curve_name = 'Baseline'
-        if self.model_name == "baseline_adv_delete_one": curve_name = 'Adv Retrain A'
-        if self.model_name == "robust_delete_one": curve_name = 'Robust A'
-        if self.model_name == "baseline_adv_insert_one": curve_name = 'Adv Retrain B'
-        if self.model_name == "robust_insert_one": curve_name = 'Robust B'
-        if self.model_name == "baseline_adv_delete_two": curve_name = 'Adv Retrain C'
-        if self.model_name == "robust_delete_two": curve_name = 'Robust C'
-        if self.model_name == "baseline_adv_insert_rootallbutone": curve_name = 'Adv Retrain D'
-        if self.model_name == "adv_keep_twocls": curve_name = 'Ensemble D Base Learner'
-        if self.model_name == "robust_monotonic": curve_name = 'Robust E'
-        if self.model_name == "baseline_adv_combine_two": curve_name = 'Adv Retrain A+B'
-        if self.model_name == "adv_del_twocls": curve_name = 'Ensemble A+B Base Learner'
-        if self.model_name == "robust_combine_two_v2_e18": curve_name = 'Robust A+B'
-        if self.model_name == "robust_insert_allbutone": curve_name = 'Robust D'
-        if self.model_name == "robust_combine_three_e17": curve_name = 'Robust A+B+E'
-
-        model_df = pd.DataFrame(dict(ERA=np.asarray(ERA, dtype=np.float32), model=curve_name, L0=np.arange(3515)))
-        return model_df
+os.environ['TUNE_DISABLE_STRICT_METRIC_CHECKING'] = '1'
 
 
-# Train MalGAN and plot result
+def train_ngram_model(config, blackbox=None, bb_name=''):
+    # num_epochs = 10000, batch_size = 150, learning_rate = 0.001, l2_lambda = 0.01, g_noise = 0, g_input = 0, g_1 = 0, g_2 = 0, g_3 = 0, c_input = 0, c_1 = 0, c_2 = 0, c_3 = 0
+    os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
+    classifier_params = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
+    generator_params = {'l1': config['g_1'], 'l2': config['g_2'], 'l3': config['g_3'], 'noise': config['g_noise']}
+    discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_opcode_ngram_model(config['lr_gen'],
+                                                                                                 config[
+                                                                                                     'l2_lambda_gen'],
+                                                                                                 config['lr_disc'],
+                                                                                                 config[
+                                                                                                     'l2_lambda_disc'],
+                                                                                                 classifier_params,
+                                                                                                 generator_params)
+    discriminator = discriminator.to(DEVICE)
+    generator = generator.to(DEVICE)
+    # with open('malware.csv') as f:
+    #     ncols = len(f.readline().split(','))
+    data_malware = np.loadtxt(MALWARE_CSV, delimiter=',', skiprows=1)
+    # data_malware = np.loadtxt('malware.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
+    data_malware = (data_malware.astype(np.bool_)).astype(float)
 
-models = ['adv_keep_twocls', 'adv_del_twocls']
-# models = ['baseline_adv_delete_one', 'baseline_adv_insert_one', 'baseline_adv_delete_two', \
-# 'baseline_adv_insert_rootallbutone', 'baseline_adv_combine_two']
-# models = ['baseline_checkpoint', 'robust_delete_one', 'robust_insert_one', 'robust_delete_two', \
-#           'robust_insert_allbutone', 'robust_monotonic', 'robust_combine_two_v2_e18', 'robust_combine_three_e17']
-dataframes = []
-for model in models:
-    malgan = MalGAN(model)
-    df = malgan.train(epochs=50, batch_size=128)
-    dataframes.append(df)
+    # data_malware_gen = np.loadtxt('malware.csv', delimiter=',', skiprows=1, usecols=range(0, 151))
+    # with open('benign.csv') as f:
+    #     ncols = len(f.readline().split(','))
+    data_benign = np.loadtxt(BENIGN_CSV, delimiter=',', skiprows=1)
+    data_benign = (data_benign.astype(np.bool_)).astype(float)
+    labels_benign = data_benign[:, 0]
+    data_benign = data_benign[:, 1:]
 
-data = pd.concat(dataframes, axis=0).reset_index(drop=True)
-plt.figure()
+    labels_malware = data_malware[:, 0]
 
-g = sns.lineplot(x='L0', y='ERA', data=data, hue='model')
-plt.xlabel("$L_0$")
-g.set(yticks=[0.00, 0.25, 0.50, 0.75, 1.00])
-g.xaxis.set_major_locator(ticker.FixedLocator([10, 200, 500, 1000, 2000, 3514]))
-handles, labels = g.get_legend_handles_labels()
-g.legend(handles=handles, labels=labels)
-fig = g.get_figure()
-fig.savefig("result.png")
-plt.show()
+    data_malware = data_malware[:, 1:]
+    # labels_malware_gen = data_malware_gen[:, 0]
+    # data_malware_gen = data_malware_gen[:, 1:]
+
+    # normalize the data to a range of [-1 1] (b/c tanh output)
+    # data_benign = data_benign / np.max(data_benign)
+    # data_benign = 2 * data_benign - 1
+
+    # data_malware = data_malware / np.max(data_malware)
+    # data_malware = 2 * data_malware - 1
+
+    # trans = RobustScaler()
+    # trans = MinMaxScaler()
+    # data_malware = trans.fit_transform(data_malware)
+    # data_benign = trans.fit_transform(data_benign)
+
+    # mean, std = np.mean(data_benign), np.std(data_benign)
+    # data_benign = [(element - mean)/std for element in data_benign]
+    # mean, std = np.mean(data_malware_gen), np.std(data_malware_gen)
+    # data_malware = [(element - mean)/std for element in data_malware_gen]
+
+    # mean, std = np.mean(data_malware), np.std(data_malware)
+    # data_malware = [(element - mean) / std for element in data_malware]
+
+    data_malware = np.array(data_malware)
+    data_benign = np.array(data_benign)
+    # convert to tensor
+    data_tensor_benign = torch.tensor(data_benign).float()
+    data_tensor_malware = torch.tensor(data_malware).float()
+    # partition = [.8, .1, .1]
+    partition = [.8, .2]
+    # use scikitlearn to split the data
+    train_data_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
+        data_tensor_benign, labels_benign, test_size=partition[1])
+    # dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_tensor_benign,
+    #     test_labels_benign, test_size=partition[1]/(partition[1] + partition[2]))
+
+    train_data_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
+        data_tensor_malware, labels_malware, test_size=partition[1])
+    # dev_data_malware, test_data_malware, dev_labels_malware, test_labels_malware = train_test_split(
+    #     test_data_tensor_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]))
+
+    # then convert them into PyTorch Datasets (note: already converted to tensors)
+    # train_data_benign = TensorDataset(train_d`a`ta_benign, train_labels_benign)
+    # dev_data_benign = TensorDataset(dev_data_benign, dev_labels_benign)
+    # test_data_benign = TensorDataset(test_data_benign, test_labels_benign)
+
+    # train_data_malware = TensorDataset(train_data_malware, train_labels_malware)
+    # dev_data_malware = TensorDataset(dev_data_malware, dev_labels_malware)
+    # test_data_malware = TensorDataset(test_data_malware, test_labels_malware)
+
+    # # finally, translate into dataloader objects
+    # train_loader_benign = DataLoader(train_data_benign, shuffle=True, batch_size=BATCH_SIZE, drop_last=True)
+    # test_loader_benign = DataLoader(test_data_benign, shuffle=True, batch_size=test_data_benign.tensors[0].shape[0])
+    #
+    # train_loader_malware = DataLoader(train_data_malware, shuffle=True, batch_size=BATCH_SIZE, drop_last=True)
+    # test_loader_malware = DataLoader(test_data_malware, shuffle=True, batch_size=test_data_malware.tensors[0].shape[0])
+
+    # initialize accuracies as empties (not storing losses here)
+    # trainAcc = []
+    # testAcc = []
+    # best_score = 0.0
+    # best_model = None
+    # best_loss = float('inf')
+    last_loss = float('inf')
+    early_stoppage_counter = 0
+
+    losses = torch.zeros((NUM_EPOCHS, 2))
+    disDecs = np.zeros((NUM_EPOCHS, 2))  # disDecs = discriminator decisions
+    print('Training MalGAN Model: ' + bb_name)
+    for e in range(NUM_EPOCHS):
+        # start = 0
+        # for step in range(data_tensor_malware.shape[0] // BATCH_SIZE):
+        # for X, y in train_loader_benign:
+        mal_idx = np.random.randint(0, train_data_malware.shape[0], config['batch_size'])
+        ben_idx = np.random.randint(0, train_data_benign.shape[0], config['batch_size'])
+        malware = train_data_malware[mal_idx]
+        benign = train_data_malware[ben_idx]
+
+        # malware = train_data_malware[start: start + BATCH_SIZE]
+        # benign = train_data_benign[start: start + BATCH_SIZE]
+        #
+        # if len(malware) != BATCH_SIZE or len(benign) != BATCH_SIZE:
+        #     break
+
+        # print(malware)
+        # print(malware[:-10].size())
+        # malware_noise = malware_noise.to(DEVICE)
+
+        malware = malware.to(DEVICE)
+        # generator.eval()
+        # with torch.no_grad():
+        generator.eval()
+        gen_malware = generator(malware)
+        binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+        binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
+        gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
+        # gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+        # gen_malware = torch.logical_or(malware, gen_malware).float()
+        # gen_malware = gen_malware.to(DEVICE)
+
+        # create minibatches of REAL and FAKE images
+        # randidx = torch.randint(data_tensor_benign.shape[0], (BATCH_SIZE,))
+
+        # get batch of benign
+        # benign = data_tensor_benign[randidx, :].to(DEVICE)
+
+        # get batch of generated malware
+        # gen_malware = generator(torch.randn(BATCH_SIZE, 85).to(DEVICE))  # output of generator
+
+        # labels used for real and fake images
+        # benign_labels = torch.ones(BATCH_SIZE, 1).to(DEVICE)
+        # mal_labels = torch.zeros(BATCH_SIZE, 1).to(DEVICE)
+
+        ### ---------------- Train the discriminator ---------------- ###
+        discriminator.train()
+        # forward pass and loss for benign
+        if bb_name == 'rf':
+            benign = benign.to(DEVICE_CPU)
+            gen_malware = gen_malware.to(DEVICE_CPU)
+            blackbox = blackbox.to(DEVICE_CPU)
+        else:
+            benign = benign.to(DEVICE)
+            gen_malware = gen_malware.to(DEVICE)
+            blackbox = blackbox.to(DEVICE)
+        # with torch.no_grad():
+        # bb_benign_labels = blackbox(benign).to(DEVICE)
+        results = blackbox.predict_proba(benign)
+        # if svm
+        if bb_name == 'svm':
+            results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+
+        results = np.array([[row[1]] for row in results])
+        bb_benign_labels = torch.from_numpy(results).type(torch.float32).to(DEVICE)
+
+        # bb_benign_labels = torch.where(bb_benign_labels > .5, 0.0, 1.0)
+        # bb_benign_labels = torch.where(bb_benign_labels > 0.5, 1.0, 0.0)
+        # bb_mal_labels = blackbox(gen_malware).to(DEVICE)
+        results = blackbox.predict_proba(gen_malware)
+        # if svm
+        if bb_name == 'svm':
+            results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+
+        benign = benign.to(DEVICE)
+        gen_malware = gen_malware.to(DEVICE)
+
+        results = np.array([[row[1]] for row in results])
+
+        bb_mal_labels = torch.from_numpy(results).type(torch.float32).to(DEVICE)
+        # bb_mal_labels = torch.where(bb_mal_labels > .5, 0.0, 1.0)
+        # bb_mal_labels = torch.where(bb_mal_labels > 0.5, 1.0, 0.0)
+
+        pred_benign = discriminator(benign)  # REAL images into discriminator
+        disc_loss_benign = lossfun(pred_benign, bb_benign_labels)  # all labels are 1
+
+        # forward pass and loss for generated malware
+        pred_malware = discriminator(gen_malware)  # FAKE images into discriminator
+        disc_loss_malware = lossfun(pred_malware, bb_mal_labels)  # all labels are 0
+        # batch_train = torch.cat((benign, gen_malware), 0)
+        # pred_disc = discriminator(batch_train)
+        # bb_labels = torch.cat((bb_benign_labels, bb_mal_labels), 0)
+        # disc_loss = lossfun(pred_disc, bb_labels)
+        # disc_loss = (disc_loss_benign + disc_loss_malware)*0.5
+        disc_loss = (disc_loss_benign + disc_loss_malware)
+        # disc_loss = (disc_loss_benign + disc_loss_malware)
+        # disc_loss = np.add(disc_loss_benign, disc_loss_malware) * 0.5
+        losses[e, 0] = disc_loss.item()
+        disDecs[e, 0] = torch.mean((pred_benign < .5).float()).detach()
+
+        # backprop
+        disc_optimizer.zero_grad()
+        disc_loss.backward()
+        disc_optimizer.step()
+
+        ### ---------------- Train the generator ---------------- ###
+
+        # create fake images and compute loss
+        mal_idx = np.random.randint(0, train_data_malware.shape[0], config['batch_size'])
+        malware = train_data_malware[mal_idx]
+
+        # noise = torch.as_tensor(np.random.randint(0, 2, (BATCH_SIZE, generator.noise_dims)))
+        # malware = torch.cat((malware, noise), 1)
+
+        generator.train()
+        discriminator.eval()
+        malware = malware.to(DEVICE)
+        gen_malware = generator(malware)
+        # binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+        # binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
+        # binarized_gen_malware_logical_or = binarized_gen_malware_logical_or.to(DEVICE)
+        binarized_gen_malware_logical_or = gen_malware.to(DEVICE)
+
+        # with torch.no_grad():
+        pred_malware = discriminator(binarized_gen_malware_logical_or)
+        benign_labels = torch.ones(config['batch_size'], 1).to(DEVICE)
+
+        # gen_malware = torch.where(malware >= 1, 1.0, gen_malware)
+        # compute and collect loss and accuracy
+        gen_loss = lossfun(pred_malware, benign_labels)
+        losses[e, 1] = gen_loss.item()
+
+        acc = torch.mean((pred_malware > .5).float()).detach()
+        disDecs[e, 1] = acc
+        # gen_malware = torch.where(malware >= 1, 1.0, gen_malware)
+        # backprop
+        gen_optimizer.zero_grad()
+        gen_loss.backward()
+        gen_optimizer.step()
+
+        # print(pred_malware)
+        # print('//////////////////////////////////////')
+        # print(gen_loss.item())
+        # exit(-1)
+        # generator.eval()
+        # test_data_malware = test_data_malware.to(DEVICE)
+        # gen_malware = generator(malware)
+        # results = blackbox.predict_proba(gen_malware)[:, -1]
+        # y_test = torch.ones(len(results), 1)
+        # fpr, tpr, thresholds = roc_curve(y_test, results)
+        # mal = 0
+        # ben = 0
+        # for result in results:
+        #     if result < 0.5:
+        #         ben += 1
+        #     else:
+        #         mal += 1
+        # score = ben/(ben+mal)
+        # curr_loss = validation(generator, discriminator, test_data_malware, lossfun)
+
+        # if gen_loss.item() < best_loss:
+        #     # torch.save(generator.state_dict(), SAVED_BEST_MODEL_PATH)
+        #     best_model = copy.deepcopy(generator)
+        #     best_loss = gen_loss.item()
+        #     best_epoch = e
+
+        # if curr_loss > last_loss:
+        #     # torch.save(generator.state_dict(), SAVED_BEST_MODEL_PATH)
+        #     # best_model = copy.deepcopy(generator)
+        #     early_stoppage_counter += 1
+        #     msg = f'Early stoppage: {early_stoppage_counter}/{EARLY_STOPPAGE_THRESHOLD}'
+        #     sys.stdout.write('\r' + msg)
+        #     if early_stoppage_counter > EARLY_STOPPAGE_THRESHOLD:
+        #         print('Early stoppage conditions reached at epoch ' + str(e))
+        #         break
+        # print(curr_loss)
+        # last_loss = curr_loss
+        # best_epoch = e
+
+        # print out a status message
+
+        # val_loss = 0.0
+        # val_steps = 0
+        # total = 0
+        # correct = 0
+        # for i, data in enumerate(valloader, 0):
+        #     with torch.no_grad():
+        #         inputs, labels = data
+        #         inputs, labels = inputs.to(device), labels.to(device)
+        #
+        #         outputs = net(inputs)
+        #         _, predicted = torch.max(outputs.data, 1)
+        #         total += labels.size(0)
+        #         correct += (predicted == labels).sum().item()
+        #
+        #         loss = criterion(outputs, labels)
+        #         val_loss += loss.cpu().numpy()
+        #         val_steps += 1
+        #
+        # train.report(
+        #     {"loss": val_loss / val_steps, "accuracy": correct / total}
+        # )
+        ray.train.report(dict(d_loss=disc_loss.item(), g_loss=gen_loss.item(), accuracy=float(acc)))
+
+        if (e + 1) % 1000 == 0:
+            # gen_loss, disc_loss = validation(generator, discriminator, test_data_malware, lossfun)
+            # msg = f'Gen loss: {str(gen_loss)} / Disc loss: {str(disc_loss)}'
+            # sys.stdout.write('\r' + msg + '\n')
+            msg = f'Finished epoch {e + 1}/{NUM_EPOCHS}'
+            sys.stdout.write('\r' + msg)
+
+            # start = start + BATCH_SIZE
+    sys.stdout.write('\nMalGAN training finished!\n')
+    # use test data?
+
+    fig, ax = plt.subplots(1, 3, figsize=(18, 5))
+
+    ax[0].plot(losses)
+    ax[0].set_xlabel('Epochs')
+    ax[0].set_ylabel('Loss')
+    ax[0].set_title('Model loss')
+    ax[0].legend(['Discrimator', 'Generator'])
+    # ax[0].set_xlim([4000,5000])
+
+    ax[1].plot(losses[::5, 0], losses[::5, 1], 'k.', alpha=.1)
+    ax[1].set_xlabel('Discriminator loss')
+    ax[1].set_ylabel('Generator loss')
+
+    # ax[2].plot(disDecs)
+    # ax[2].set_xlabel('Epochs')
+    # ax[2].set_ylabel('Probablity ("real")')
+    # ax[2].set_title('Discriminator output')
+    # ax[2].legend(['Real', 'Fake'])
+    plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', 'ngram_' + bb_name + '.png'), bbox_inches='tight')
+    plt.close(fig)
+    # plt.show()
+
+    torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
+    # diff = False
+    # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
+    #     if p1.data.ne(p2.data).sum() > 0:
+    #         diff = True
+    #         break
+    # if diff:
+    #     print('models are different!')
+    # else:
+    #     print('models are same!')
+    print('/////////////////////////////////////////////////////////////')
+    # print(f'Generator model saved to: {SAVED_MODEL_PATH}')
+    print(f'Testing with {str(NOISE)} noise inputs')
+    # print(f'Testing best performing model (epoch: {str(best_epoch)})')
+    # best_model = NgramGenerator(noise_dims=NOISE)
+    # best_model.load_state_dict(torch.load(SAVED_BEST_MODEL_PATH))
+    # validate(best_model, blackbox, test_data_malware)
+    # print('############################################################')
+    print('Testing final model')
+    # validate(generator, blackbox, bb_name, test_data_malware)
+    test_data_malware = test_data_malware.to(DEVICE)
+    results = discriminator(test_data_malware)
+    # print(results)
+    mal = 0
+    ben = 0
+    for result in results:
+        if result[0] > 0.5:
+            ben += 1
+        else:
+            mal += 1
+    print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
+    print('##############################################################################')
+
+    return
+
+
+def validation(generator, discriminator, malware, lossfun):
+    generator.eval()
+    discriminator.eval()
+    malware = malware.to(DEVICE)
+    gen_malware = generator(malware)
+    binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+    binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
+    binarized_gen_malware_logical_or = binarized_gen_malware_logical_or.to(DEVICE)
+    # binarized_gen_malware_logical_or = gen_malware.to(DEVICE)
+    pred_malware = discriminator(binarized_gen_malware_logical_or)
+    benign_labels = torch.ones(pred_malware.size(dim=0), 1).to(DEVICE)
+    mal_labels = torch.zeros(pred_malware.size(dim=0), 1).to(DEVICE)
+    # gen_malware = torch.where(malware >= 1, 1.0, gen_malware)
+    # compute and collect loss and accuracy
+    disc_loss = lossfun(pred_malware, mal_labels).item()
+    gen_loss = lossfun(pred_malware, benign_labels).item()
+    return gen_loss, disc_loss
+
+
+def create_opcode_ngram_model(learning_rate_gen, l2lambda_gen, learning_rate_disc, l2lambda_disc, classifier,
+                              generator):
+    # build the model
+    # blackbox = BlackBoxDetector()
+    discriminator = NgramClassifier(l2=classifier['l1'], l3=classifier['l2'],
+                                    l4=classifier['l3'])
+    generator = NgramGenerator(l2=generator['l1'], l3=generator['l2'],
+                               l4=generator['l3'], noise_dims=generator['noise'])
+
+    # loss function
+    # lossfun = nn.BCEWithLogitsLoss()
+    lossfun = nn.BCELoss()
+    # optimizer
+    disc_optimizer = torch.optim.Adam(discriminator.parameters(), lr=learning_rate_disc, weight_decay=l2lambda_disc,
+                                      betas=(.9, .999))
+    gen_optimizer = torch.optim.Adam(generator.parameters(), lr=learning_rate_gen, weight_decay=l2lambda_gen,
+                                     betas=(.9, .999))
+
+    return discriminator, generator, lossfun, disc_optimizer, gen_optimizer
+
+
+class NgramClassifier(nn.Module):
+    def __init__(self, d_input_dim=350, l2=700, l3=450, l4=325):
+        super(NgramClassifier, self).__init__()
+
+        # input layer
+        self.input = nn.Linear(d_input_dim, l2)
+        # input layer
+        self.fc1 = nn.Linear(l2, l3)
+        # input layer
+        # self.fc2 = nn.Linear(self.fc1.out_features, self.fc1.out_features)
+        self.fc3 = nn.Linear(l3, l4)
+        # output layer
+        self.output = nn.Linear(l4, 1)
+        # batch norm
+        self.batch_norm1 = torch.nn.BatchNorm1d(self.fc1.out_features)
+        # self.batch_norm2 = torch.nn.BatchNorm1d(self.fc2.out_features)
+        self.batch_norm3 = torch.nn.BatchNorm1d(self.fc3.out_features)
+
+    def forward(self, x):
+        ######################################
+        x = self.input(x)
+        # x = F.leaky_relu(x)
+        x = F.tanh(x)
+        # x = F.relu(x)
+        # x = F.sigmoid(x)
+        # x = F.dropout(x, 0.3)
+        #######################################
+        x = self.fc1(x)
+        #  batch norm
+        # x = self.batch_norm1(x)
+        # x = F.leaky_relu(x)
+        x = F.tanh(x)
+        # x = F.relu(x)
+        # x = F.sigmoid(x)
+        # x = F.dropout(x, 0.3)
+        #######################################
+        # x = self.fc2(x)
+        # # batch norm
+        # x = self.batch_norm2(x)
+        # x = F.leaky_relu(x)
+        # x = F.tanh(x)
+        # # x = F.relu(x)
+        # # x = F.sigmoid(x)
+        # x = F.dropout(x, 0.3)
+        #######################################
+        x = self.fc3(x)
+        # batch norm
+        x = self.batch_norm3(x)
+        # x = F.leaky_relu(x)
+        x = F.tanh(x)
+        # x = F.relu(x)
+        # x = F.sigmoid(x)
+        # x = F.dropout(x, 0.3)
+        #########################################
+        x = self.output(x)
+        x = F.sigmoid(x)
+        # x = F.softmax(x)
+        #########################################
+        return x
+
+
+class NgramGenerator(nn.Module):
+    def __init__(self, noise_dims=70, input_layers=350, l2=840, l3=1480, l4=740):
+        super(NgramGenerator, self).__init__()
+
+        # amount of noise to add
+        self.noise_dims = noise_dims
+        self.input_layers = input_layers + self.noise_dims
+        # self.input_layers = input_layers
+        # input layer
+        # self.input = nn.Linear(self.noise_dims + self.input_layers, 75)
+
+        self.input = nn.Linear(self.input_layers, l2)
+        # input layer
+        self.fc1 = nn.Linear(l2, l3)
+        # # input layer
+        # self.fc2 = nn.Linear(self.fc1.out_features, self.fc1.out_features)
+
+        self.fc3 = nn.Linear(l3, l4)
+
+        # output layer
+        self.output = nn.Linear(l4, input_layers)
+
+        # self.double()
+        self.batch_norm1 = torch.nn.BatchNorm1d(self.fc1.out_features)
+        # self.batch_norm2 = torch.nn.BatchNorm1d(self.fc2.out_features)
+        self.batch_norm3 = torch.nn.BatchNorm1d(self.fc3.out_features)
+
+        # self.input = nn.Linear(self.input_layers, self.input_layers)
+        # self.fc1 = nn.Linear(self.input.out_features, self.input.out_features)
+        # self.fc3 = nn.Linear(self.fc1.out_features, self.fc1.out_features)
+        # self.output = nn.Linear(self.fc3.out_features, g_output_dim)
+
+    def forward(self, x):
+        # noise = torch.rand(len(x), self.noise_dims)
+        # noise = torch.where(noise > 0.5, 1.0, 0.0)
+        # noise = noise.to(DEVICE)
+        # x = torch.cat((x, noise), -1)
+        # orig = x.detach().clone()
+
+        # if self.training:
+        #     self.input = nn.Linear(self.input_layers + self.noise_dims, self.input_layers*2)
+        # noise = torch.as_tensor(np.random.randint(0, 2, (x.shape[0], self.noise_dims)))
+        noise = torch.rand(x.shape[0], self.noise_dims)
+
+        noise = noise.to(DEVICE)
+        x = torch.cat((x, noise), 1)
+        # else:
+        #     self.input = nn.Linear(self.input_layers, self.input_layers*2)
+
+        ###########################################
+        x = self.input(x)
+        # x = F.leaky_relu(x, 0.2)
+        x = F.leaky_relu(x)
+        # x = F.tanh(x)
+        # x = F.relu(x)
+        # x = F.sigmoid(x)
+        # x = torch.maximum(x, orig)
+        # x = F.dropout(x, 0.3)
+        ############################################
+        x = self.fc1(x)
+        # x = self.batch_norm1(x)
+        # x = F.leaky_relu(x, 0.2)
+        x = F.leaky_relu(x)
+        # x = F.tanh(x)
+        # x = F.relu(x)
+        # x = F.sigmoid(x)
+        # x = torch.maximum(x, orig)
+        # x = F.dropout(x, 0.3)
+        ###########################################
+        # x = self.fc2(x)
+        # x = self.batch_norm2(x)
+        # x = F.tanh(x)
+        # x = F.dropout(x, 0.3)
+        ###########################################
+        x = self.fc3(x)
+        # x = self.batch_norm3(x)
+        # x = F.leaky_relu(x, 0.2)
+        x = F.leaky_relu(x)
+        # x = F.tanh(x)
+        # x = F.relu(x)
+        # x = F.sigmoid(x)
+        # x = torch.where(x > 0.5, 1.0, 0.0)
+        # x = torch.logical_or(orig, x).float()
+        # x = torch.maximum(x, orig)
+        # x = F.dropout(x, 0.3)
+        ############################################
+        x = self.output(x)
+        # x = torch.tanh(x)
+        # x = F.tanh(x)
+        # x = F.relu(x)
+        x = F.sigmoid(x)
+        ############################################
+
+        return x
+
+
+def validate(generator, blackbox, bb_name, data_malware):
+    generator.eval()
+    generator.to(DEVICE)
+    blackbox.to(DEVICE)
+    test_data_malware = data_malware.to(DEVICE)
+    gen_malware = generator(test_data_malware)
+    # gen_malware = generator(malware)
+    binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+    binarized_gen_malware_logical_or = torch.logical_or(test_data_malware, binarized_gen_malware).float()
+    gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
+    results = blackbox.predict_proba(test_data_malware)
+    # if svm
+    if bb_name == 'svm':
+        results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+    # results = torch.where(results > 0.5, True, False)
+    mal = 0
+    ben = 0
+    for result in results:
+        if result[0] < 0.5:
+            ben += 1
+        else:
+            mal += 1
+    print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files')
+
+    results = blackbox.predict_proba(gen_malware)
+    # if svm
+    if bb_name == 'svm':
+        results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+    # results = torch.where(results > 0.5, True, False)
+    mal = 0
+    ben = 0
+    for result in results:
+        if result[0] < 0.5:
+            ben += 1
+        else:
+            mal += 1
+    print(f'test set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
+
+
+def train():
+    ray.init()
+    if TRAIN_BLACKBOX:
+        train_blackbox()
+    # blackbox = BlackBoxDetector()
+    # blackbox.load_state_dict(torch.load(BB_SAVED_MODEL_PATH))
+    # blackbox.eval()
+    # blackbox = torch.load('dt_model.pth')
+
+    tune_config = {
+        "g_noise": tune.choice([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]),
+        "g_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+        "g_2": tune.choice([1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000]),
+        "g_3": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+        "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+        "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
+        "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
+        "lr_gen": tune.uniform(0.001, 0.1),
+        "lr_disc": tune.uniform(0.001, 0.1),
+        "l2_lambda_gen": tune.uniform(0.001, 0.1),
+        "l2_lambda_disc": tune.uniform(0.001, 0.1),
+        "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
+    }
+
+    scheduler = ASHAScheduler(
+        metric="g_loss",
+        mode="min",
+        max_t=NUM_EPOCHS,
+        grace_period=60,
+        reduction_factor=2,
+    )
+
+    for bb_model in BB_MODELS:
+        blackbox = torch.load(bb_model['path'])
+        blackbox = blackbox.to(DEVICE)
+
+        # result = tune.run(
+        #     partial(train_ngram_model, data_dir=data_dir),
+        #     # resources_per_trial={"cpu": 2, "gpu": gpus_per_trial},
+        #     config=tune_config,
+        #     num_samples=num_samples,
+        #     scheduler=scheduler,
+        # )
+        result = tune.run(
+            partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']),
+            config=tune_config,
+            num_samples=10000,
+            scheduler=scheduler,
+            resources_per_trial={"cpu": 4, "gpu": 1},
+        )
+
+        # losses, ngram_generator, discriminator, disDecs, test_data_malware = (
+        #     train_ngram_model(blackbox=blackbox, bb_name=bb_model['name'], num_epochs=10000, batch_size=150,
+        #                       learning_rate=0.001, l2_lambda=0.01, g_noise=0, g_input=0, g_1=0, g_2=0, g_3=0,
+        #                       c_input=0, c_1=0, c_2=0, c_3=0)
+        # )
+
+        best_trial = result.get_best_trial("g_loss", "min", "last")
+        best_config_gen = result.get_best_config(metric="g_loss", mode="min")
+        best_config_disc = result.get_best_config(metric="d_loss", mode="min")
+
+        print(f"Best trial config: {best_trial.config}")
+        print(f"Best trial final validation loss: {best_trial.last_result['g_loss']}")
+        print(f"Best trial final validation accuracy: {best_trial.last_result['accuracy']}")
+
+        print("Best config gen:", best_config_gen)
+        print("Best config disc:", best_config_disc)
+
+        # best_trained_model = NgramGenerator(best_trial.config["l1"], best_trial.config["l2"])
+        # device = "cpu"
+        # if torch.cuda.is_available():
+        #     device = "cuda:0"
+        #     if gpus_per_trial > 1:
+        #         best_trained_model = nn.DataParallel(best_trained_model)
+        # best_trained_model.to(device)
+        #
+        # best_checkpoint = result.get_best_checkpoint(trial=best_trial, metric="accuracy", mode="max")
+        # with best_checkpoint.as_directory() as checkpoint_dir:
+        #     data_path = Path(checkpoint_dir) / "data.pkl"
+        #     with open(data_path, "rb") as fp:
+        #         best_checkpoint_data = pickle.load(fp)
+        #
+        #     best_trained_model.load_state_dict(best_checkpoint_data["net_state_dict"])
+        #     test_acc = test_accuracy(best_trained_model, device)
+        #     print("Best trial test set accuracy: {}".format(test_acc))
+
+        # print(f'\nLosses: {str(losses)}')
+        # print(f'Training Accuracy: {str(trainAcc)}')
+        # print(f'Test Accuracy: {str(testAcc)}')
+        # print(disDecs)
+        # torch.save(best_model.state_dict(), SAVED_BEST_MODEL_PATH)
+        # torch.save(ngram_generator.state_dict(), SAVED_MODEL_PATH + bb_model['name'] + '.pth')
+        # # diff = False
+        # # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
+        # #     if p1.data.ne(p2.data).sum() > 0:
+        # #         diff = True
+        # #         break
+        # # if diff:
+        # #     print('models are different!')
+        # # else:
+        # #     print('models are same!')
+        # print('/////////////////////////////////////////////////////////////')
+        # # print(f'Generator model saved to: {SAVED_MODEL_PATH}')
+        # print(f'Testing with {str(NOISE)} noise inputs')
+        # # print(f'Testing best performing model (epoch: {str(best_epoch)})')
+        # # best_model = NgramGenerator(noise_dims=NOISE)
+        # # best_model.load_state_dict(torch.load(SAVED_BEST_MODEL_PATH))
+        # # validate(best_model, blackbox, test_data_malware)
+        # # print('############################################################')
+        # print('Testing final model')
+        # validate(ngram_generator, blackbox, bb_model['name'], test_data_malware)
+        # test_data_malware = test_data_malware.to(DEVICE)
+        # results = discriminator(test_data_malware)
+        # # print(results)
+        # mal = 0
+        # ben = 0
+        # for result in results:
+        #     if result[0] > 0.5:
+        #         ben += 1
+        #     else:
+        #         mal += 1
+        # print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
+        # print('##############################################################################')
+        break
+    print('Finished!')
+train()
