@@ -221,10 +221,8 @@ def extract():
     if PHASE == 1:
         print('collecting malware ngrams')
         std_opcodes()
-        extract_ngram_features(root_dir='./samples/malware_samples/decompiled', feature_count=300, malware=True)
-    if PHASE == 2:
-        print('extracting malware ngrams')
-        std_opcodes()
+        # extract_ngram_features(root_dir='./samples/malware_samples/decompiled', feature_count=300, malware=True)
+        # print('extracting malware ngrams')
         malware_ngrams = extract_ngram_features(root_dir='./samples/malware_samples/decompiled', feature_count=300,
                                                 malware=True)
         # gc.collect()
@@ -236,19 +234,16 @@ def extract():
         return
 
 ########################################################################################################################
-    if PHASE == 3:
+    if PHASE == 2:
 
 
         print('extracting benign ngrams')
         std_opcodes()
-        extract_ngram_features(root_dir='./samples/benign_samples/decompiled', feature_count=50, malware=False)
-        return
+        # extract_ngram_features(root_dir='./samples/benign_samples/decompiled', feature_count=50, malware=False)
 
-    if PHASE == 4:
         with open('malware_features.txt', 'r') as file:
             malware_ngrams = file.read()
             malware_ngrams = malware_ngrams.split('\n')
-        std_opcodes()
         benign_ngrams = extract_ngram_features(root_dir='./samples/benign_samples/decompiled', feature_count=50,
                                                exclude=malware_ngrams, malware=False)
 
@@ -261,7 +256,7 @@ def extract():
         return
 
 ########################################################################################################################
-    if PHASE == 5:
+    if PHASE == 3:
         with open('benign_features.txt', 'r') as file:
             benign_ngrams = file.read()
             benign_ngrams = benign_ngrams.split('\n')
