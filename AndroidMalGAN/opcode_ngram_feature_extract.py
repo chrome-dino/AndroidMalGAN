@@ -4,14 +4,17 @@ from collections import Counter
 import re
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+import json
 import logging
 import gc
 
-N_COUNT = 5
+N_COUNT = 10
 MAX_COLLECT = 5
 PHASE = 1
 LIMIT = False
 std_codes = {}  # empty list which will later contain all the standard op-codes read from the ops.txt file
+NGRAM_STORE = './ngram_store'
+NGRAM_STORE_LIMIT = 50
 
 
 def merge_ngram_dict(ngram_dict, ngram_file_name, exclude):
@@ -32,6 +35,7 @@ def merge_ngram_dict(ngram_dict, ngram_file_name, exclude):
     scaled = np.array(list(ngram_dict_file.items()), dtype=object)
     scaled[:, 1] = scaler.fit_transform(scaled[:, -1].reshape(1, scaled.shape[0]).T).T
     ngram_dict_file = dict(scaled)
+    ngram_dict_file = {key: val for key, val in ngram_dict_file.items() if val != 0}
     # x = pd.concat([ngram_dict_file, x], axis=0, ignore_index=True)
 
     # ngram_dict = pd.read_csv(csv_filename, index_col=0, header=None, squeeze=True).to_dict()
@@ -140,6 +144,7 @@ def extract_ngram_features(root_dir='./samples', feature_count=300, exclude=None
     if os.path.isfile(ngram_file_name):
         os.remove(ngram_file_name)
     count = 0
+    ngram_store_count = 0
     current_hash = ''
     ngram_dict = {}
     first = True
@@ -152,12 +157,21 @@ def extract_ngram_features(root_dir='./samples', feature_count=300, exclude=None
                     current_hash = md5_hash
                     first = False
                 if md5_hash != current_hash:
+                    if os.stat(ngram_file_name).st_size == 0:
+                        current_hash = md5_hash
+                        continue
                     ngram_dict = merge_ngram_dict(ngram_dict, ngram_file_name, exclude)
 
                     count += 1
                     current_hash = md5_hash
                     open(ngram_file_name, 'w').close()
                     print(current_hash + ' ' + str(count))
+
+                    if count % NGRAM_STORE_LIMIT == 0:
+                        with open(f'./{NGRAM_STORE}/ngram_store_{str(ngram_store_count)}.json', 'w') as f:
+                            json.dump(ngram_dict, f)
+                        ngram_dict = {}
+                        ngram_store_count += 1
 
                 ####################################################################################################
                 #
@@ -182,7 +196,7 @@ def extract_ngram_features(root_dir='./samples', feature_count=300, exclude=None
                     with open(ngram_file_name, 'a') as ngram_file:
                         for i in range(len(file_chunks)):
                             ngram = ''
-                            if i + 5 > len(file_chunks):
+                            if i + N_COUNT > len(file_chunks):
                                 break
                             for n in range(N_COUNT):
                                 ngram += (file_chunks[i + n])
@@ -195,6 +209,16 @@ def extract_ngram_features(root_dir='./samples', feature_count=300, exclude=None
     # def keyfunc(k):
     #     return ngram_dict[k]
     ngram_dict = merge_ngram_dict(ngram_dict, ngram_file_name, exclude)
+    with open(f'./{NGRAM_STORE}/ngram_store_{str(ngram_store_count)}.json', 'w') as f:
+        json.dump(ngram_dict, f)
+    ngram_dict = {}
+    for f in os.listdir(NGRAM_STORE):
+        if not f.endswith('.json'):
+            continue
+        with open(os.path.join(NGRAM_STORE, f)) as json_file:
+            data = json.load(json_file)
+            ngram_dict = {x: ngram_dict.get(x, 0) + data.get(x, 0) for x in
+                          set(ngram_dict).union(data)}
     filtered_ngrams = Counter(ngram_dict).most_common(feature_count)
     print('finished extracting ngrams')
     return [filtered_ngrams[n][0] for n in range(len(filtered_ngrams))]
@@ -226,10 +250,10 @@ def extract():
         malware_ngrams = extract_ngram_features(root_dir='./samples/malware_samples/decompiled', feature_count=300,
                                                 malware=True)
         # gc.collect()
-        if os.path.isfile('malware_features.txt'):
-            os.remove('malware_features.txt')
+        if os.path.isfile(f'malware_features_{str(N_COUNT)}.txt'):
+            os.remove(f'malware_features_{str(N_COUNT)}.txt')
         malware_ngrams = "\n".join(malware_ngrams)
-        with open('malware_features.txt', 'w') as file:
+        with open(f'malware_features_{str(N_COUNT)}.txt', 'w') as file:
             file.write(malware_ngrams)
         return
 
