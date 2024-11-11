@@ -21,11 +21,11 @@ def labeled_data(root_dir='.', ngram_features=None, malware=False):
     sample_md5s = []
     dirs = [item[0] for item in os.walk(root_dir)]
     if malware:
-        if os.path.isfile('malware.csv'):
-            os.remove('malware.csv')
+        if os.path.isfile('malware_ngram.csv'):
+            os.remove('malware_ngram.csv')
     else:
-        if os.path.isfile('benign.csv'):
-            os.remove('benign.csv')
+        if os.path.isfile('benign_ngram.csv'):
+            os.remove('benign_ngram.csv')
     print('getting files...')
     for sub_dir in dirs:
         if md5_hash := re.findall(r"([a-fA-F\d]{32})", sub_dir):
@@ -80,19 +80,19 @@ def labeled_data(root_dir='.', ngram_features=None, malware=False):
         # row['malware'] = malware
         # row['md5'] = file_dest.split('\\')[-2]
         if malware:
-            if os.path.isfile('malware.csv'):
+            if os.path.isfile('malware_ngram.csv'):
                 df = pd.DataFrame([row])
-                df.to_csv('malware.csv', mode='a', header=False)
+                df.to_csv('malware_ngram.csv', mode='a', header=False)
             else:
                 df = pd.DataFrame([row])
-                df.to_csv('malware.csv')
+                df.to_csv('malware_ngram.csv')
         else:
-            if os.path.isfile('benign.csv'):
+            if os.path.isfile('benign_ngram.csv'):
                 df = pd.DataFrame([row])
-                df.to_csv('benign.csv', mode='a', header=False)
+                df.to_csv('benign_ngram.csv', mode='a', header=False)
             else:
                 df = pd.DataFrame([row])
-                df.to_csv('benign.csv')
+                df.to_csv('benign_ngram.csv')
     return
 
 
@@ -303,7 +303,7 @@ def extract():
         return
         # gc.collect()
         # df = pd.DataFrame(malware_data)
-        # df.to_csv('malware.csv')
+        # df.to_csv('malware_ngram.csv')
         # gc.collect()
 
 ########################################################################################################################
@@ -316,6 +316,6 @@ def extract():
         return
         # gc.collect()
         # df = pd.DataFrame(benign_data)
-        # df.to_csv('benign.csv')
+        # df.to_csv('benign_ngram.csv')
         # gc.collect()
         # print('finished')

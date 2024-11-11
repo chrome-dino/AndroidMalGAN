@@ -46,17 +46,18 @@ def merge_ngram_dict(ngram_dict, ngram_file_name, exclude):
     return ngram_dict
 
 
-def labeled_data(root_dir='.', ngram_features=None, malware=False, n_count=3):
+def labeled_data(root_dir='.', ngram_features=None, malware=False, n_count=3, single_file=False):
     # print('obtaining labelled data')
     # final = []
     sample_md5s = []
     # dirs = [item[0] for item in os.walk(root_dir)]
-    if malware:
-        if os.path.isfile('malware.csv'):
-            os.remove('malware.csv')
-    else:
-        if os.path.isfile('benign.csv'):
-            os.remove('benign.csv')
+    if not single_file:
+        if malware:
+            if os.path.isfile('malware_ngram.csv'):
+                os.remove('malware_ngram.csv')
+        else:
+            if os.path.isfile('benign_ngram.csv'):
+                os.remove('benign_ngram.csv')
     # print('getting files...')
     count = 0
     with open("samples.txt", "w") as f:
@@ -117,20 +118,23 @@ def labeled_data(root_dir='.', ngram_features=None, malware=False, n_count=3):
                     row[n] += 1
             # row['malware'] = malware
             # row['md5'] = file_dest.split('\\')[-2]
-            if malware:
-                if os.path.isfile(f'malware_ngram_{str(n_count)}.csv'):
-                    df = pd.DataFrame([row])
-                    df.to_csv(f'malware_ngram_{str(n_count)}.csv', mode='a', header=False)
+            if not single_file:
+                if malware:
+                    if os.path.isfile(f'malware_ngram_{str(n_count)}.csv'):
+                        df = pd.DataFrame([row])
+                        df.to_csv(f'malware_ngram_{str(n_count)}.csv', mode='a', header=False)
+                    else:
+                        df = pd.DataFrame([row])
+                        df.to_csv(f'malware_ngram_{str(n_count)}.csv')
                 else:
-                    df = pd.DataFrame([row])
-                    df.to_csv(f'malware_ngram_{str(n_count)}.csv')
+                    if os.path.isfile(f'benign_ngram_{str(n_count)}.csv'):
+                        df = pd.DataFrame([row])
+                        df.to_csv(f'benign_ngram_{str(n_count)}.csv', mode='a', header=False)
+                    else:
+                        df = pd.DataFrame([row])
+                        df.to_csv(f'benign_ngram_{str(n_count)}.csv')
             else:
-                if os.path.isfile(f'benign_ngram_{str(n_count)}.csv'):
-                    df = pd.DataFrame([row])
-                    df.to_csv(f'benign_ngram_{str(n_count)}.csv', mode='a', header=False)
-                else:
-                    df = pd.DataFrame([row])
-                    df.to_csv(f'benign_ngram_{str(n_count)}.csv')
+                return [row]
     return
 
 
@@ -303,7 +307,7 @@ def extract():
                      n_count=n)
         # gc.collect()
         # df = pd.DataFrame(malware_data)
-        # df.to_csv('malware.csv')
+        # df.to_csv('malware_ngram.csv')
         # gc.collect()
 
     ########################################################################################################################
@@ -312,7 +316,7 @@ def extract():
                      n_count=n)
         # gc.collect()
         # df = pd.DataFrame(benign_data)
-        # df.to_csv('benign.csv')
+        # df.to_csv('benign_ngram.csv')
         # gc.collect()
         # print('finished')
         print(f'finished extracting {str(n)} gram data...')

@@ -31,16 +31,16 @@ def train_ngram_model():
                                                                                                  L2_LAMBDA)
     discriminator = discriminator.to(DEVICE)
     generator = generator.to(DEVICE)
-    # with open('malware.csv') as f:
+    # with open('malware_ngram.csv') as f:
     #     ncols = len(f.readline().split(','))
-    data_malware = np.loadtxt('malware.csv', delimiter=',', skiprows=1)
-    # data_malware = np.loadtxt('malware.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
+    data_malware = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1)
+    # data_malware = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
     data_malware = (data_malware.astype(np.bool_)).astype(float)
 
-    # data_malware_gen = np.loadtxt('malware.csv', delimiter=',', skiprows=1, usecols=range(0, 151))
-    # with open('benign.csv') as f:
+    # data_malware_gen = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1, usecols=range(0, 151))
+    # with open('benign_ngram.csv') as f:
     #     ncols = len(f.readline().split(','))
-    data_benign = np.loadtxt('benign.csv', delimiter=',', skiprows=1)
+    data_benign = np.loadtxt('benign_ngram.csv', delimiter=',', skiprows=1)
     data_benign = (data_benign.astype(np.bool_)).astype(float)
     labels_benign = data_benign[:, 0]
     data_benign = data_benign[:, 1:]

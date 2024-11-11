@@ -26,7 +26,7 @@ matplotlib_inline.backend_inline.set_matplotlib_formats('svg')
 configs = configparser.ConfigParser()
 configs.read("settings.ini")
 
-BB_MODELS = [{'name': 'rf', 'path': 'rf_model.pth'}, {'name': 'dt', 'path': 'dt_model.pth'},
+BB_MODELS = [{'name': 'rf', 'path': 'rf_ngram_model.pth'}, {'name': 'dt', 'path': 'dt_model.pth'},
              {'name': 'svm', 'path': 'svm_model.pth'}]
 
 # FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
@@ -45,8 +45,8 @@ DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/opcode_ngram_'
 SAVED_BEST_MODEL_PATH = 'opcode_ngram_malgan_best.pth'
 
-MALWARE_CSV = '/home/dsu/Documents/AndroidMalGAN/malware.csv'
-BENIGN_CSV = '/home/dsu/Documents/AndroidMalGAN/benign.csv'
+MALWARE_CSV = '/home/dsu/Documents/AndroidMalGAN/malware_ngram.csv'
+BENIGN_CSV = '/home/dsu/Documents/AndroidMalGAN/benign_ngram.csv'
 # BB_SAVED_MODEL_PATH = 'opcode_ngram_blackbox.pth'
 
 os.environ['TUNE_DISABLE_STRICT_METRIC_CHECKING'] = '1'
@@ -67,14 +67,14 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
                                                                                                  generator_params)
     discriminator = discriminator.to(DEVICE)
     generator = generator.to(DEVICE)
-    # with open('malware.csv') as f:
+    # with open('malware_ngram.csv') as f:
     #     ncols = len(f.readline().split(','))
     data_malware = np.loadtxt(MALWARE_CSV, delimiter=',', skiprows=1)
-    # data_malware = np.loadtxt('malware.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
+    # data_malware = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
     data_malware = (data_malware.astype(np.bool_)).astype(float)
 
-    # data_malware_gen = np.loadtxt('malware.csv', delimiter=',', skiprows=1, usecols=range(0, 151))
-    # with open('benign.csv') as f:
+    # data_malware_gen = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1, usecols=range(0, 151))
+    # with open('benign_ngram.csv') as f:
     #     ncols = len(f.readline().split(','))
     data_benign = np.loadtxt(BENIGN_CSV, delimiter=',', skiprows=1)
     data_benign = (data_benign.astype(np.bool_)).astype(float)

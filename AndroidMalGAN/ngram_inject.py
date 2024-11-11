@@ -52,10 +52,10 @@ def inject(input_file):
     command = command.split()
     subprocess.run(command)
 
-    data_malware = labeled_data(root_dir='temp_file_dir', ngram_features=ngram_features)
+    data_malware = labeled_data(root_dir='temp_file_dir', ngram_features=ngram_features, single_file=True)
     # df = pd.DataFrame(data_malware)
-    # df.to_csv('temp_file_dir/malware.csv')
-    # data_malware = np.loadtxt('temp_file_dir/malware.csv', delimiter=',')
+    # df.to_csv('temp_file_dir/malware_ngram.csv')
+    # data_malware = np.loadtxt('temp_file_dir/malware_ngram.csv', delimiter=',')
     # print(data_malware)
     # labels_malware = data_malware[:, 0]
     # data_malware = data_malware[:, 1:]

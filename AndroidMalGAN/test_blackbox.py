@@ -123,10 +123,10 @@ def create_blackbox_model(learning_rate, l2lambda):
 blackbox, lossfun, blackbox_optimizer = create_blackbox_model(BB_LEARNING_RATE, BB_L2_LAMBDA)
 blackbox = blackbox.to(DEVICE)
 
-data_malware = np.loadtxt('../malware.csv', delimiter=',', skiprows=1)
+data_malware = np.loadtxt('../malware_ngram.csv', delimiter=',', skiprows=1)
 data_malware = (data_malware.astype(np.bool_)).astype(float)
 
-data_benign = np.loadtxt('../benign.csv', delimiter=',', skiprows=1)
+data_benign = np.loadtxt('../benign_ngram.csv', delimiter=',', skiprows=1)
 data_benign = (data_benign.astype(np.bool_)).astype(float)
 labels_benign = data_benign[:, 0]
 data_benign = data_benign[:, 1:]
@@ -193,7 +193,7 @@ print(str(accuracy_score(yTest, yPredict)*100))
 RF = RandomForestClassifier()
 yPredict = RF.fit(xTrain, yTrain).predict(xTest)
 torch_rf = convert(RF, 'pytorch')
-torch.save(torch_rf, 'rf_model.pth')
+torch.save(torch_rf, 'rf_ngram_model.pth')
 print('RF Classification Report')
 print(classification_report(yTest, yPredict))
 print('RF Accuracy')
@@ -265,7 +265,7 @@ print('Blackbox benign KNN')
 print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
 print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
 
-torch_rf = torch.load('rf_model.pth')
+torch_rf = torch.load('rf_ngram_model.pth')
 # torch_rf.eval()
 torch_rf = torch_rf.to(DEVICE)
 # data_tensor_malware = data_tensor_malware.to(DEVICE)
@@ -353,10 +353,10 @@ exit(-1)
 #
 # blackbox.eval()
 #
-# data_malware = np.loadtxt('../malware.csv', delimiter=',', skiprows=1)
+# data_malware = np.loadtxt('../malware_ngram.csv', delimiter=',', skiprows=1)
 # data_malware = (data_malware.astype(np.bool_)).astype(float)
 #
-# data_benign = np.loadtxt('../benign.csv', delimiter=',', skiprows=1)
+# data_benign = np.loadtxt('../benign_ngram.csv', delimiter=',', skiprows=1)
 # data_benign = (data_benign.astype(np.bool_)).astype(float)
 #
 # data_benign = data_benign[:, 1:]

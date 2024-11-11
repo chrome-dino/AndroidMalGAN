@@ -1,8 +1,8 @@
 import os
 import subprocess
 import random
-from opcode_ngram_feature_extract import labeled_data
-from opcode_ngram_model import NgramGenerator
+from other_apk_feature_extract import labeled_api_data
+from apis_model import ApisGenerator
 import torch
 import numpy as np
 import pandas as pd
@@ -11,48 +11,22 @@ SAVED_MODEL_PATH = './opcode_ngram_malgan.pth'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def gen_code(opcode):
-    idx = int(opcode, 16)
-    with open('AndroidMalGAN/inject_code.txt') as f:
-        inject_list = f.read()
-    inject_list = inject_list.split('###')
-    del inject_list[0]
-    code = inject_list[idx].split('\n', 1)[1]
-    return code
-
-
-def ngram_to_opcode(ngram):
-    # opcodes = {}
-    # with open('std_codes.txt') as f:
-    #     for line in f:
-    #         (key, val) = line.split()
-    #         opcodes[val] = key
-    final = ''
-    # for i in range(0, len(ngram), 2):
-    #     print(ngram[i:i + 2])
-    for i in range(len(ngram)):
-        opcode = ngram[i:i + 1]
-        final += gen_code(opcode) + '\n'
-    return final
-
-
 def inject(input_file):
     os.system('rm -rf temp_file_dir')
-    ngram_generator = NgramGenerator()
-    ngram_generator.load_state_dict(torch.load(SAVED_MODEL_PATH))
-    ngram_generator.eval()
+    api_generator = ApisGenerator()
+    api_generator.load_state_dict(torch.load(SAVED_MODEL_PATH))
+    api_generator.eval()
 
-    with open('ngram_features.txt', 'r') as file:
-        ngram_features = file.read()
-        ngram_features = ngram_features.split('\n')
+    with open('api_features.txt', 'r') as file:
+        api_features = file.read()
+        api_features = api_features.split('\n')
 
     filename = os.path.basename(input_file).split('.')[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o {filename}')
     command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
-
-    data_malware = labeled_data(root_dir='temp_file_dir', ngram_features=ngram_features)
+    data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=None, malware=api_features, single_file=True)
     # df = pd.DataFrame(data_malware)
     # df.to_csv('temp_file_dir/malware_ngram.csv')
     # data_malware = np.loadtxt('temp_file_dir/malware_ngram.csv', delimiter=',')
@@ -71,7 +45,7 @@ def inject(input_file):
     # malware_noise = torch.cat((data_tensor_malware, noise), 1)
     # data_tensor_malware = data_tensor_malware.to(DEVICE)
     # gen_malware = ngram_generator(data_tensor_malware.to(DEVICE)).cpu()
-    gen_malware = ngram_generator(data_tensor_malware)
+    gen_malware = api_generator(data_tensor_malware)
     gen_malware = gen_malware[0]
 
     final = {}
@@ -79,6 +53,7 @@ def inject(input_file):
         diff = gen_malware - data_tensor_malware[i]
         final[labels_malware[i]] = diff
     print(final)
+
     smali_inject = ''
     function_start = '''.method private throw2()V
         .locals 3
@@ -86,15 +61,15 @@ def inject(input_file):
         .line 31
     '''
     function_end = '.end method\n'
-    for ngrams in final:
+    for api in final:
         smali_inject += function_start
-        smali_inject += ngram_to_opcode(ngrams)
+        smali_inject += 'invoke-virtual {}, ' + api + '\n'
         smali_inject += function_end
 
     smali_dir = f'temp_file_dir/{filename}/smali'
     # smali_files = [f for f in os.listdir(smali_dir) if os.path.isfile(os.path.join(smali_dir, f) and f.endswith('.smali'))]
     smali_files = []
-    for root, subdir, files in os.walk(smali_dir):
+    for root, subdir, fileadd es in os.walk(smali_dir):
         for name in files:
             smali_file = os.path.join(root, name)
             if os.path.isfile(smali_file) and name.endswith('.smali'):

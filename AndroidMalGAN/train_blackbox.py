@@ -19,11 +19,11 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 
 
-def train_blackbox():
-    data_malware = np.loadtxt('malware.csv', delimiter=',', skiprows=1)
+def train_blackbox(malware_data, benign_data, model_type):
+    data_malware = np.loadtxt(malware_data, delimiter=',', skiprows=1)
     data_malware = (data_malware.astype(np.bool_)).astype(float)
 
-    data_benign = np.loadtxt('benign.csv', delimiter=',', skiprows=1)
+    data_benign = np.loadtxt(benign_data, delimiter=',', skiprows=1)
     data_benign = (data_benign.astype(np.bool_)).astype(float)
     labels_benign = data_benign[:, 0]
     data_benign = data_benign[:, 1:]
@@ -56,7 +56,7 @@ def train_blackbox():
     DT = DecisionTreeClassifier()
     yPredict = DT.fit(xTrain, yTrain).predict(xTest)
     torch_dt = convert(DT, 'pytorch')
-    torch.save(torch_dt, 'dt_model.pth')
+    torch.save(torch_dt, f'dt_{model_type}_model.pth')
     print('DT Classification Report')
     print(classification_report(yTest, yPredict))
     print('DT Accuracy')
@@ -66,7 +66,7 @@ def train_blackbox():
     yPredict = KNN.fit(xTrain, yTrain).predict(xTest)
     extra_config = {hummingbird.ml.operator_converters.constants.BATCH_SIZE: list(data_tensor_benign.size())[0]}
     torch_knn = convert(KNN, 'pytorch', extra_config=extra_config)
-    torch.save(torch_knn, 'knn_model.pth')
+    torch.save(torch_knn, f'knn_{model_type}_model.pth')
     # pickle.dump(KNN, open('knn_model.sav', 'wb'))
     print('KNN Classification Report')
     print(classification_report(yTest, yPredict))
@@ -76,14 +76,14 @@ def train_blackbox():
     RF = RandomForestClassifier()
     yPredict = RF.fit(xTrain, yTrain).predict(xTest)
     torch_rf = convert(RF, 'pytorch')
-    torch.save(torch_rf, 'rf_model.pth')
+    torch.save(torch_rf, f'rf_{model_type}_model.pth')
     print('RF Classification Report')
     print(classification_report(yTest, yPredict))
     print('RF Accuracy')
     print(str(accuracy_score(yTest, yPredict)*100))
 
 
-    torch_dt = torch.load('dt_model.pth')
+    torch_dt = torch.load(f'dt_{model_type}_model.pth')
     # torch_rf.eval()
     torch_dt = torch_dt.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE)
@@ -113,8 +113,7 @@ def train_blackbox():
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
 
-
-    torch_knn = torch.load('knn_model.pth')
+    torch_knn = torch.load(f'knn_{model_type}_model.pth')
     # torch_rf.eval()
     # torch_knn = torch_knn.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE_CPU)
@@ -144,7 +143,7 @@ def train_blackbox():
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
 
-    torch_rf = torch.load('rf_model.pth')
+    torch_rf = torch.load(f'rf_{model_type}_model.pth')
 
     torch_rf = torch_rf.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE)

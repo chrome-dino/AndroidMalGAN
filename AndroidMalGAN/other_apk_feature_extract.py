@@ -15,6 +15,31 @@ API_STORE = './api_store'
 API_STORE_LIMIT = 50
 
 
+def labeled_permissions_data(root_dir='.'):
+    permissions = []
+    # https://github.com/mrcse/Android-Permissions/blob/main/xml_permissions.txt
+    with open('permissions.txt', 'r') as fp:
+        read_lines = fp.readlines()
+        for line in read_lines:
+            permissions.append(line.rstrip())
+
+    parser = etree.XMLParser(recover=True)
+    for root, dirs, files in os.walk(root_dir):  # Scanning through each file in each subdirectory
+        for file in files:
+            if file == 'AndroidManifest.xml':
+                file_dest = os.path.join(root, file)
+                root = etree.parse(file_dest, parser=parser)
+                file_permissions = root.findall("uses-permission")
+                row = dict.fromkeys(permissions, 0)
+                for perm in file_permissions:
+                    for att in perm.attrib:
+                        p = perm.attrib[att]
+                        if p in row.keys():
+                            row[p] = 1
+
+                return [row]
+
+
 def extract_permission_features(root_dir='./samples', malware=False):
     permissions = []
     # https://github.com/mrcse/Android-Permissions/blob/main/xml_permissions.txt
@@ -227,13 +252,14 @@ def extract_intents_features(root_dir='.', feature_count=300, exclude=None):
     return [filtered_intents[n][0] for n in range(len(filtered_intents))]
 
 
-def labeled_intent_data(root_dir='.', intent_features=None, malware=False):
-    if malware:
-        if os.path.isfile('malware_intents.csv'):
-            os.remove('malware_intents.csv')
-    else:
-        if os.path.isfile('benign_intents.csv'):
-            os.remove('benign_intents.csv')
+def labeled_intent_data(root_dir='.', intent_features=None, malware=False, single_file=False):
+    if not single_file:
+        if malware:
+            if os.path.isfile('malware_intents.csv'):
+                os.remove('malware_intents.csv')
+        else:
+            if os.path.isfile('benign_intents.csv'):
+                os.remove('benign_intents.csv')
 
     parser = etree.XMLParser(recover=True)
     count = 0
@@ -318,21 +344,23 @@ def labeled_intent_data(root_dir='.', intent_features=None, malware=False):
                                     c = category.attrib[att]
                                     if c in intent_features:
                                         row[c] += 1
-
-                if malware:
-                    if os.path.isfile('malware_intents.csv'):
-                        df = pd.DataFrame([row])
-                        df.to_csv('malware_intents.csv', mode='a', header=False)
+                if not single_file:
+                    if malware:
+                        if os.path.isfile('malware_intents.csv'):
+                            df = pd.DataFrame([row])
+                            df.to_csv('malware_intents.csv', mode='a', header=False)
+                        else:
+                            df = pd.DataFrame([row])
+                            df.to_csv('malware_intents.csv')
                     else:
-                        df = pd.DataFrame([row])
-                        df.to_csv('malware_intents.csv')
+                        if os.path.isfile('benign_intents.csv'):
+                            df = pd.DataFrame([row])
+                            df.to_csv('benign_intents.csv', mode='a', header=False)
+                        else:
+                            df = pd.DataFrame([row])
+                            df.to_csv('benign_intents.csv')
                 else:
-                    if os.path.isfile('benign_intents.csv'):
-                        df = pd.DataFrame([row])
-                        df.to_csv('benign_intents.csv', mode='a', header=False)
-                    else:
-                        df = pd.DataFrame([row])
-                        df.to_csv('benign_intents.csv')
+                    return [row]
 
                 count += 1
                 if count % 100 == 0:
@@ -423,13 +451,14 @@ def extract_api_features(root_dir='./samples', feature_count=300, exclude=None):
     return [filtered_apis[n][0] for n in range(len(filtered_apis))]
 
 
-def labeled_api_data(root_dir='.', api_features=None, malware=False):
-    if malware:
-        if os.path.isfile('malware_apis.csv'):
-            os.remove('malware_apis.csv')
-    else:
-        if os.path.isfile('benign_apis.csv'):
-            os.remove('benign_apis.csv')
+def labeled_api_data(root_dir='.', api_features=None, malware=False, single_file=False):
+    if not single_file:
+        if malware:
+            if os.path.isfile('malware_apis.csv'):
+                os.remove('malware_apis.csv')
+        else:
+            if os.path.isfile('benign_apis.csv'):
+                os.remove('benign_apis.csv')
 
     count = 0
     current_hash = ''
@@ -444,20 +473,23 @@ def labeled_api_data(root_dir='.', api_features=None, malware=False):
                     current_hash = md5_hash
                     first = False
                 if md5_hash != current_hash:
-                    if malware:
-                        if os.path.isfile('malware_apis.csv'):
-                            df = pd.DataFrame([row])
-                            df.to_csv('malware_apis.csv', mode='a', header=False)
+                    if not single_file:
+                        if malware:
+                            if os.path.isfile('malware_apis.csv'):
+                                df = pd.DataFrame([row])
+                                df.to_csv('malware_apis.csv', mode='a', header=False)
+                            else:
+                                df = pd.DataFrame([row])
+                                df.to_csv('malware_apis.csv')
                         else:
-                            df = pd.DataFrame([row])
-                            df.to_csv('malware_apis.csv')
+                            if os.path.isfile('benign_apis.csv'):
+                                df = pd.DataFrame([row])
+                                df.to_csv('benign_apis.csv', mode='a', header=False)
+                            else:
+                                df = pd.DataFrame([row])
+                                df.to_csv('benign_apis.csv')
                     else:
-                        if os.path.isfile('benign_apis.csv'):
-                            df = pd.DataFrame([row])
-                            df.to_csv('benign_apis.csv', mode='a', header=False)
-                        else:
-                            df = pd.DataFrame([row])
-                            df.to_csv('benign_apis.csv')
+                        return [row]
                     row = dict.fromkeys(api_features, 0)
                     count += 1
                     if count % 100 == 0:

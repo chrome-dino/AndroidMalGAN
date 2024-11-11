@@ -12,10 +12,10 @@ blackbox.load_state_dict(torch.load(BB_SAVED_MODEL_PATH))
 blackbox = blackbox.to(DEVICE)
 blackbox.eval()
 
-data_malware = np.loadtxt('../malware.csv', delimiter=',', skiprows=1)
+data_malware = np.loadtxt('../malware_ngram.csv', delimiter=',', skiprows=1)
 data_malware = (data_malware.astype(np.bool_)).astype(float)
 
-data_benign = np.loadtxt('../benign.csv', delimiter=',', skiprows=1)
+data_benign = np.loadtxt('../benign_ngram.csv', delimiter=',', skiprows=1)
 data_benign = (data_benign.astype(np.bool_)).astype(float)
 
 data_benign = data_benign[:, 1:]
