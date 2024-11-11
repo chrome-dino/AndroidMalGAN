@@ -145,6 +145,10 @@ def extract_ngram_features(root_dir='./samples', feature_count=300, exclude=None
 
     if os.path.isfile(ngram_file_name):
         os.remove(ngram_file_name)
+
+    filelist = [f for f in os.listdir(NGRAM_STORE) if f.endswith(".json")]
+    for f in filelist:
+        os.remove(os.path.join(NGRAM_STORE, f))
     count = 0
     ngram_store_count = 0
     current_hash = ''
