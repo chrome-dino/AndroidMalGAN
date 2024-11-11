@@ -69,7 +69,7 @@ def inject(input_file):
     smali_dir = f'temp_file_dir/{filename}/smali'
     # smali_files = [f for f in os.listdir(smali_dir) if os.path.isfile(os.path.join(smali_dir, f) and f.endswith('.smali'))]
     smali_files = []
-    for root, subdir, fileadd es in os.walk(smali_dir):
+    for root, subdir, files in os.walk(smali_dir):
         for name in files:
             smali_file = os.path.join(root, name)
             if os.path.isfile(smali_file) and name.endswith('.smali'):
