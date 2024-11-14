@@ -53,11 +53,11 @@ def labeled_data(root_dir='.', ngram_features=None, malware=False, n_count=3, si
     # dirs = [item[0] for item in os.walk(root_dir)]
     if not single_file:
         if malware:
-            if os.path.isfile('malware_ngram.csv'):
-                os.remove('malware_ngram.csv')
+            if os.path.isfile(f'malware_ngram_{str(n_count)}.csv'):
+                os.remove(f'malware_ngram_{str(n_count)}.csv')
         else:
-            if os.path.isfile('benign_ngram.csv'):
-                os.remove('benign_ngram.csv')
+            if os.path.isfile(f'benign_ngram_{str(n_count)}.csv'):
+                os.remove(f'benign_ngram_{str(n_count)}.csv')
     # print('getting files...')
     count = 0
     with open("samples.txt", "w") as f:

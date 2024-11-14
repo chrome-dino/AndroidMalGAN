@@ -1,6 +1,7 @@
 import configparser
 import copy
-
+import pandas as pd
+import json
 from functools import partial
 import torch
 import torch.nn as nn
@@ -40,6 +41,7 @@ BB_L2_LAMBDA = 0.01
 BATCH_SIZE = 150
 NOISE = 0
 TRAIN_BLACKBOX = False
+RAY_TUNE = False
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/permissions_'
@@ -87,22 +89,28 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
     # convert to tensor
     data_tensor_benign = torch.tensor(data_benign).float()
     data_tensor_malware = torch.tensor(data_malware).float()
-    # partition = [.8, .1, .1]
-    partition = [.8, .2]
+    partition = [.8, .1, .1]
+    # partition = [.8, .2]
     # use scikitlearn to split the data
     train_data_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
         data_tensor_benign, labels_benign, test_size=partition[1])
+    dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_benign,
+        test_labels_benign, test_size=partition[1] / (partition[1] + partition[2]))
     # dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_tensor_benign,
     #     test_labels_benign, test_size=partition[1]/(partition[1] + partition[2]))
 
     train_data_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
         data_tensor_malware, labels_malware, test_size=partition[1])
+    dev_data_malware, test_data_malware, dev_labels_malware, test_labels_malware = train_test_split(
+        test_data_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]))
 
-    last_loss = float('inf')
-    early_stoppage_counter = 0
+    # last_loss = float('inf')
+    # early_stoppage_counter = 0
 
     losses = torch.zeros((NUM_EPOCHS, 2))
     disDecs = np.zeros((NUM_EPOCHS, 2))  # disDecs = discriminator decisions
+    disDecs_dev = np.zeros((NUM_EPOCHS, 2))
+    acc_test_dev = np.zeros((NUM_EPOCHS, 2))
     print('Training MalGAN Model: ' + bb_name)
     for e in range(NUM_EPOCHS):
 
@@ -199,7 +207,55 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
         gen_loss.backward()
         gen_optimizer.step()
 
-        ray.train.report(dict(d_loss=disc_loss.item(), g_loss=gen_loss.item(), accuracy=float(acc)))
+        if not RAY_TUNE:
+            if bb_name == 'rf':
+                gen_malware = gen_malware.to(DEVICE_CPU)
+
+            results = blackbox.predict_proba(gen_malware)[:, -1]
+            if bb_name == 'svm':
+                results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+
+            mal = 0
+            ben = 0
+            for result in results:
+                if result[0] < 0.5:
+                    ben += 1
+                else:
+                    mal += 1
+            score = ben/(ben+mal)
+
+            acc_test_dev[e, 0] = score
+
+            benign = dev_data_benign.to(DEVICE)
+            pred_benign = discriminator(benign)  # REAL images into discriminator
+            disDecs_dev[e, 0] = torch.mean((pred_benign < .5).float()).detach()
+
+            malware = dev_data_malware.to(DEVICE)
+            gen_malware = generator(malware)
+            gen_malware = gen_malware.to(DEVICE)
+            pred_malware = discriminator(gen_malware)
+            disDecs_dev[e, 1] = torch.mean((pred_malware > .5).float()).detach()
+
+            if bb_name == 'rf':
+                gen_malware = gen_malware.to(DEVICE_CPU)
+
+            results = blackbox.predict_proba(gen_malware)[:, -1]
+            if bb_name == 'svm':
+                results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+
+            mal = 0
+            ben = 0
+            for result in results:
+                if result[0] < 0.5:
+                    ben += 1
+                else:
+                    mal += 1
+            score = ben/(ben+mal)
+
+            acc_test_dev[e, 1] = score
+
+        else:
+            ray.train.report(dict(d_loss=disc_loss.item(), g_loss=gen_loss.item(), accuracy=float(acc)))
 
         if (e + 1) % 1000 == 0:
             # gen_loss, disc_loss = validation(generator, discriminator, test_data_malware, lossfun)
@@ -212,29 +268,44 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
     sys.stdout.write('\nMalGAN training finished!\n')
     # use test data?
 
-    fig, ax = plt.subplots(1, 3, figsize=(18, 5))
+    if not RAY_TUNE:
+        fig, ax = plt.subplots(1, 3, figsize=(18, 5))
 
-    ax[0].plot(losses)
-    ax[0].set_xlabel('Epochs')
-    ax[0].set_ylabel('Loss')
-    ax[0].set_title('Model loss')
-    ax[0].legend(['Discrimator', 'Generator'])
-    # ax[0].set_xlim([4000,5000])
+        ax[0].plot(losses)
+        ax[0].set_xlabel('Epochs')
+        ax[0].set_ylabel('Loss')
+        ax[0].set_title(f'Permissions Model loss ({str(bb_name)})')
+        ax[0].legend(['Discrimator', 'Generator'])
+        # ax[0].set_xlim([4000,5000])
 
-    ax[1].plot(losses[::5, 0], losses[::5, 1], 'k.', alpha=.1)
-    ax[1].set_xlabel('Discriminator loss')
-    ax[1].set_ylabel('Generator loss')
+        ax[1].plot(losses[::5, 0], losses[::5, 1], 'k.', alpha=.1)
+        ax[1].set_xlabel('Discriminator loss')
+        ax[1].set_ylabel('Generator loss')
+        ax[1].set_title(f'Permissions Model Loss Mapping ({str(bb_name)})')
 
-    # ax[2].plot(disDecs)
-    # ax[2].set_xlabel('Epochs')
-    # ax[2].set_ylabel('Probablity ("real")')
-    # ax[2].set_title('Discriminator output')
-    # ax[2].legend(['Real', 'Fake'])
-    plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', 'permissions_' + bb_name + '.png'), bbox_inches='tight')
-    plt.close(fig)
+        ax[2].plot(disDecs)
+        ax[2].set_xlabel('Epochs')
+        ax[2].set_ylabel('Probablity Malicious')
+        ax[2].set_title(f'Permissions Discriminator Output Train Set ({str(bb_name)})')
+        ax[2].legend(['Benign', 'Malware'])
+
+        ax[3].plot(disDecs)
+        ax[3].set_xlabel('Epochs')
+        ax[3].set_ylabel('Probablity Malicious')
+        ax[3].set_title(f'Permissions Discriminator Output Dev Set ({str(bb_name)})')
+        ax[3].legend(['Benign', 'Malware'])
+
+        ax[4].plot(disDecs)
+        ax[4].set_xlabel('Epochs')
+        ax[4].set_ylabel('% Blackbox Bypass')
+        ax[4].set_title(f'Permissions Model Accuracy ({str(bb_name)})')
+        ax[4].legend(['Test', 'Dev'])
+
+        plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', 'permissions_' + bb_name + '.png'), bbox_inches='tight')
+        plt.close(fig)
     # plt.show()
 
-    torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
+        torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
     # diff = False
     # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
     #     if p1.data.ne(p2.data).sum() > 0:
@@ -244,49 +315,54 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
     #     print('models are different!')
     # else:
     #     print('models are same!')
-    print('/////////////////////////////////////////////////////////////')
+    # print('/////////////////////////////////////////////////////////////')
     # print(f'Generator model saved to: {SAVED_MODEL_PATH}')
-    print(f'Testing with {str(NOISE)} noise inputs')
+    # print(f'Testing with {str(NOISE)} noise inputs')
     # print(f'Testing best performing model (epoch: {str(best_epoch)})')
     # best_model = NgramGenerator(noise_dims=NOISE)
     # best_model.load_state_dict(torch.load(SAVED_BEST_MODEL_PATH))
     # validate(best_model, blackbox, test_data_malware)
     # print('############################################################')
-    print('Testing final model')
+
+    if not RAY_TUNE:
+        print('Testing final model')
+        validate(generator, blackbox, bb_name, test_data_malware, test_data_benign)
+
+    # print('Testing final model')
     # validate(generator, blackbox, bb_name, test_data_malware)
-    test_data_malware = test_data_malware.to(DEVICE)
-    results = discriminator(test_data_malware)
-    # print(results)
-    mal = 0
-    ben = 0
-    for result in results:
-        if result[0] > 0.5:
-            ben += 1
-        else:
-            mal += 1
-    print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
+    # test_data_malware = test_data_malware.to(DEVICE)
+    # results = discriminator(test_data_malware)
+    # # print(results)
+    # mal = 0
+    # ben = 0
+    # for result in results:
+    #     if result[0] > 0.5:
+    #         ben += 1
+    #     else:
+    #         mal += 1
+    # print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
     print('##############################################################################')
 
     return
 
 
-def validation(generator, discriminator, malware, lossfun):
-    generator.eval()
-    discriminator.eval()
-    malware = malware.to(DEVICE)
-    gen_malware = generator(malware)
-    binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
-    binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
-    binarized_gen_malware_logical_or = binarized_gen_malware_logical_or.to(DEVICE)
-    # binarized_gen_malware_logical_or = gen_malware.to(DEVICE)
-    pred_malware = discriminator(binarized_gen_malware_logical_or)
-    benign_labels = torch.ones(pred_malware.size(dim=0), 1).to(DEVICE)
-    mal_labels = torch.zeros(pred_malware.size(dim=0), 1).to(DEVICE)
-    # gen_malware = torch.where(malware >= 1, 1.0, gen_malware)
-    # compute and collect loss and accuracy
-    disc_loss = lossfun(pred_malware, mal_labels).item()
-    gen_loss = lossfun(pred_malware, benign_labels).item()
-    return gen_loss, disc_loss
+# def validation(generator, discriminator, malware, lossfun):
+#     generator.eval()
+#     discriminator.eval()
+#     malware = malware.to(DEVICE)
+#     gen_malware = generator(malware)
+#     binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+#     binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
+#     binarized_gen_malware_logical_or = binarized_gen_malware_logical_or.to(DEVICE)
+#     # binarized_gen_malware_logical_or = gen_malware.to(DEVICE)
+#     pred_malware = discriminator(binarized_gen_malware_logical_or)
+#     benign_labels = torch.ones(pred_malware.size(dim=0), 1).to(DEVICE)
+#     mal_labels = torch.zeros(pred_malware.size(dim=0), 1).to(DEVICE)
+#     # gen_malware = torch.where(malware >= 1, 1.0, gen_malware)
+#     # compute and collect loss and accuracy
+#     disc_loss = lossfun(pred_malware, mal_labels).item()
+#     gen_loss = lossfun(pred_malware, benign_labels).item()
+#     return gen_loss, disc_loss
 
 
 def create_permissions_model(learning_rate_gen, l2lambda_gen, learning_rate_disc, l2lambda_disc, classifier,
@@ -467,21 +543,37 @@ class PermissionsGenerator(nn.Module):
         return x
 
 
-def validate(generator, blackbox, bb_name, data_malware):
+def validate(generator, blackbox, bb_name, data_malware, data_benign):
     generator.eval()
     generator.to(DEVICE)
     blackbox.to(DEVICE)
     test_data_malware = data_malware.to(DEVICE)
+    test_data_benign = data_benign.to(DEVICE)
     gen_malware = generator(test_data_malware)
     # gen_malware = generator(malware)
     binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
     binarized_gen_malware_logical_or = torch.logical_or(test_data_malware, binarized_gen_malware).float()
     gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
     results = blackbox.predict_proba(test_data_malware)
+    results_benign = blackbox.predict_proba(test_data_benign)
     # if svm
     if bb_name == 'svm':
         results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+        results_benign = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_benign]
     # results = torch.where(results > 0.5, True, False)
+    mal = 0
+    ben = 0
+    for result in results_benign:
+        if result[0] < 0.5:
+            ben += 1
+        else:
+            mal += 1
+
+    print(f'test set benign predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
+    acc_ben = ben / (ben + mal)
+    tn = ben
+    fp = mal
+
     mal = 0
     ben = 0
     for result in results:
@@ -489,7 +581,16 @@ def validate(generator, blackbox, bb_name, data_malware):
             ben += 1
         else:
             mal += 1
-    print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files')
+
+    print(f'test set malware predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
+    acc_mal = mal / (ben + mal)
+    tp_mal = mal
+    fn_mal = ben
+    acc_mal_ben = (tp_mal + tn) / (fn_mal + fp + tp_mal + tn)
+    mal_ben_cm = {'true_pos': tp_mal, 'true_neg': tn, 'false_pos': fp, 'false_neg': fn_mal}
+    precision_mal_ben = tp_mal / (tp_mal + fp)
+    recall_mal_ben = tp_mal / (tp_mal + fn_mal)
+    f1_mal_ben = 2 * (1 / ((1 / precision_mal_ben) + (1 / recall_mal_ben)))
 
     results = blackbox.predict_proba(gen_malware)
     # if svm
@@ -504,27 +605,49 @@ def validate(generator, blackbox, bb_name, data_malware):
         else:
             mal += 1
     print(f'test set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
+    acc_gen = mal / (ben + mal)
+    tp_gen = mal
+    fn_gen = ben
+    acc_gen_ben = (tp_gen + tn) / (fn_gen + fp + tp_gen + tn)
+    gen_ben_cm = {'true_pos': tp_gen, 'true_neg': tn, 'false_pos': fp, 'false_neg': fn_gen}
+    precision_gen_ben = tp_gen / (tp_gen + fp)
+    recall_gen_ben = tp_gen / (tp_gen + fn_gen)
+    f1_gen_ben = 2 * (1 / ((1 / precision_gen_ben) + (1 / recall_gen_ben)))
+    perturbations = 0
+    for i in range(len(gen_malware)):
+        diff = gen_malware[i] - test_data_malware[i]
+        perturbations += diff.sum()
+    perturbations = perturbations / len(gen_malware)
+    results = {'model': 'permissions',
+               'black box': bb_name,
+               'black box score benign': acc_ben,
+               'black box score malware': acc_mal,
+               'black box score gen malware': acc_gen,
+               'black box accuracy malware': acc_mal_ben,
+               'black box accuracy gen malware': acc_gen_ben,
+               'malware set confusion matrix': mal_ben_cm,
+               'gen malware set confusion matrix': gen_ben_cm,
+               'malware set precision': precision_mal_ben,
+               'malware set recall': recall_mal_ben,
+               'malware set f1': f1_mal_ben,
+               'gen malware set precision': precision_gen_ben,
+               'gen malware set recall': recall_gen_ben,
+               'gen malware set f1': f1_gen_ben,
+               'gen malware perturbations avg': perturbations
+               }
+    if os.path.isfile(f'results.csv'):
+        df = pd.DataFrame([results])
+        df.to_csv(f'results.csv', mode='a', header=False)
+    else:
+        df = pd.DataFrame([results])
+        df.to_csv(f'results.csv')
 
 
 def train():
-    ray.init()
+    if RAY_TUNE:
+        ray.init()
     if TRAIN_BLACKBOX:
         train_blackbox('malware_permissions.csv', 'benign_permissions.csv', 'permissions')
-
-    tune_config = {
-        "g_noise": tune.choice([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]),
-        "g_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
-        "g_2": tune.choice([1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000]),
-        "g_3": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
-        "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
-        "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
-        "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
-        "lr_gen": tune.uniform(0.001, 0.1),
-        "lr_disc": tune.uniform(0.001, 0.1),
-        "l2_lambda_gen": tune.uniform(0.001, 0.1),
-        "l2_lambda_disc": tune.uniform(0.001, 0.1),
-        "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
-    }
 
     scheduler = ASHAScheduler(
         metric="g_loss",
@@ -537,24 +660,43 @@ def train():
     for bb_model in BB_MODELS:
         blackbox = torch.load(bb_model['path'])
         blackbox = blackbox.to(DEVICE)
-        result = tune.run(
-            partial(train_permissions_model, blackbox=blackbox, bb_name=bb_model['name']),
-            config=tune_config,
-            num_samples=10000,
-            scheduler=scheduler,
-            resources_per_trial={"cpu": 4, "gpu": 1},
-        )
+        if RAY_TUNE:
+            tune_config = {
+                "g_noise": tune.choice([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]),
+                "g_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+                "g_2": tune.choice([1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000]),
+                "g_3": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+                "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+                "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
+                "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
+                "lr_gen": tune.uniform(0.001, 0.1),
+                "lr_disc": tune.uniform(0.001, 0.1),
+                "l2_lambda_gen": tune.uniform(0.001, 0.1),
+                "l2_lambda_disc": tune.uniform(0.001, 0.1),
+                "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
+            }
+            blackbox = torch.load(bb_model['path'])
+            blackbox = blackbox.to(DEVICE)
+            result = tune.run(
+                partial(train_permissions_model, blackbox=blackbox, bb_name=bb_model['name']),
+                config=tune_config,
+                num_samples=10000,
+                scheduler=scheduler,
+                resources_per_trial={"cpu": 4, "gpu": 1},
+            )
 
-        best_trial = result.get_best_trial("g_loss", "min", "last")
-        best_config_gen = result.get_best_config(metric="g_loss", mode="min")
-        best_config_disc = result.get_best_config(metric="d_loss", mode="min")
+            best_trial = result.get_best_trial("g_loss", "min", "last")
+            best_config_gen = result.get_best_config(metric="g_loss", mode="min")
+            best_config_disc = result.get_best_config(metric="d_loss", mode="min")
 
-        print(f"Best trial config: {best_trial.config}")
-        print(f"Best trial final validation loss: {best_trial.last_result['g_loss']}")
-        print(f"Best trial final validation accuracy: {best_trial.last_result['accuracy']}")
+            print(f"Best trial config: {best_trial.config}")
+            print(f"Best trial final validation loss: {best_trial.last_result['g_loss']}")
+            print(f"Best trial final validation accuracy: {best_trial.last_result['accuracy']}")
 
-        print("Best config gen:", best_config_gen)
-        print("Best config disc:", best_config_disc)
-        break
+            print("Best config gen:", best_config_gen)
+            print("Best config disc:", best_config_disc)
+        else:
+            with open('config_permissions.json', 'r') as f:
+                config = json.load(f)
+                train_permissions_model(config, blackbox=blackbox, bb_name=bb_model['name'])
     print('Finished!')
-train()
