@@ -28,7 +28,9 @@ configs = configparser.ConfigParser()
 configs.read("settings.ini")
 
 BB_MODELS = [{'name': 'rf', 'path': 'rf_ngram_model.pth'}, {'name': 'dt', 'path': 'dt_ngram_model.pth'},
-             {'name': 'svm', 'path': 'svm_ngram_model.pth'}]
+             {'name': 'svm', 'path': 'svm_ngram_model.pth'}, {'name': 'knn', 'path': 'knn_ngram_model.pth'},
+             {'name': 'gnb', 'path': 'gnb_ngram_model.pth'}, {'name': 'lr', 'path': 'lr_ngram_model.pth'},
+             {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}]
 
 # FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
 # LEARNING_RATE = 0.0002
@@ -43,6 +45,7 @@ NOISE = 0
 N_COUNT = 3
 TRAIN_BLACKBOX = False
 RAY_TUNE = False
+SPLIT_DATA = False
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/opcode_ngram_'
@@ -118,6 +121,11 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
     partition = [.8, .1, .1]
     # partition = [.8, .2]
     # use scikitlearn to split the data
+    if SPLIT_DATA:
+        data_tensor_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
+            data_tensor_benign, labels_benign, test_size=0.4)
+        data_tensor_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
+            data_tensor_malware, labels_malware, test_size=0.4)
     train_data_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
         data_tensor_benign, labels_benign, test_size=partition[1])
     dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_benign,
@@ -165,7 +173,7 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
         mal_idx = np.random.randint(0, train_data_malware.shape[0], config['batch_size'])
         ben_idx = np.random.randint(0, train_data_benign.shape[0], config['batch_size'])
         malware = train_data_malware[mal_idx]
-        benign = train_data_malware[ben_idx]
+        benign = train_data_benign[ben_idx]
 
         # malware = train_data_malware[start: start + BATCH_SIZE]
         # benign = train_data_benign[start: start + BATCH_SIZE]

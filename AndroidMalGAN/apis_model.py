@@ -28,7 +28,9 @@ configs = configparser.ConfigParser()
 configs.read("settings.ini")
 
 BB_MODELS = [{'name': 'rf', 'path': 'rf_apis_model.pth'}, {'name': 'dt', 'path': 'dt_apis_model.pth'},
-             {'name': 'svm', 'path': 'svm_apis_model.pth'}]
+             {'name': 'svm', 'path': 'svm_apis_model.pth'}, {'name': 'knn', 'path': 'knn_apis_model.pth'},
+             {'name': 'gnb', 'path': 'gnb_apis_model.pth'}, {'name': 'lr', 'path': 'lr_apis_model.pth'},
+             {'name': 'mlp', 'path': 'mlp_apis_model.pth'}]
 
 # FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
 # LEARNING_RATE = 0.0002

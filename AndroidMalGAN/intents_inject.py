@@ -49,11 +49,22 @@ def inject(input_file):
         # Parse the XML file
         tree = ET.parse('AndroidManifest.xml')
         root = tree.getroot()
-
+        # for application in root.findall('application'):
+        #     for activity in application.findall('activity'):
+        #         for intent in activity.findall('intent-filter'):
+        #             actions = intent.findall('action')
         # Add a new element
-        new_element = ET.Element('uses-permission')
+        activity = root.findall('application')[0].find('activity')
+        intent_filter = ET.Element('intent-filter')
+        if 'action' in intent:
+            new_element = ET.Element('action')
+        elif 'category' in intent:
+            new_element = ET.Element('category')
+        else:
+            continue
         new_element.set('android:name', intent)
-        root.append(new_element)
+        intent_filter.append(new_element)
+        activity.append(intent_filter)
         # Write the modified XML back to the file
         tree.write('AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
 

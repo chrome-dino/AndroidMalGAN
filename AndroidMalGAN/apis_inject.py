@@ -26,7 +26,8 @@ def inject(input_file):
     command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
-    data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=None, malware=api_features, single_file=True)
+    data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features, malware=api_features,
+                                    single_file=True)
     # df = pd.DataFrame(data_malware)
     # df.to_csv('temp_file_dir/malware_ngram.csv')
     # data_malware = np.loadtxt('temp_file_dir/malware_ngram.csv', delimiter=',')
