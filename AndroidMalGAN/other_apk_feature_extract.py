@@ -15,10 +15,10 @@ API_STORE = './api_store'
 API_STORE_LIMIT = 50
 
 
-def labeled_permissions_data(root_dir='.'):
+def labeled_permissions_data(root_dir='.', permissions_file='permissions.txt'):
     permissions = []
     # https://github.com/mrcse/Android-Permissions/blob/main/xml_permissions.txt
-    with open('permissions.txt', 'r') as fp:
+    with open(permissions_file, 'r') as fp:
         read_lines = fp.readlines()
         for line in read_lines:
             permissions.append(line.rstrip())

@@ -6,13 +6,29 @@ from opcode_ngram_feature_extract import labeled_data as labeled_ngram_data
 
 MAX_COLLECT = 5
 LIMIT = False
+FEATURE_REDUCE = False
 
 
-def feature_reduction():
-    pass
+def feature_reduction(n_count=5):
+    with open(f'ngram_features_{str(n_count)}.txt', 'r') as file:
+        ngram_features = file.read()
+        ngram_features = ngram_features.split('\n')
+    with open('intent_features.txt', 'r') as file:
+        intent_features = file.read()
+        intent_features = intent_features.split('\n')
+    with open('api_features.txt', 'r') as file:
+        api_features = file.read()
+        api_features = api_features.split('\n')
+    permissions = []
+    with open('permissions.txt', 'r') as fp:
+        read_lines = fp.readlines()
+        for line in read_lines:
+            permissions.append(line.rstrip())
+    reduced_features = ngram_features + intent_features + api_features + permissions
+    return reduced_features
 
 
-def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=False):
+def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=False, white_list=None):
     sample_md5s = []
     if not single_file:
         if malware:
@@ -40,12 +56,18 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
     with open(f'ngram_features_{str(n_count)}.txt', 'r') as file:
         ngram_features = file.read()
         ngram_features = ngram_features.split('\n')
+        if FEATURE_REDUCE:
+            ngram_features = [i for i in ngram_features if i not in white_list]
     with open('intent_features.txt', 'r') as file:
         intent_features = file.read()
         intent_features = intent_features.split('\n')
+        if FEATURE_REDUCE:
+            intent_features = [i for i in intent_features if i not in white_list]
     with open('api_features.txt', 'r') as file:
         api_features = file.read()
         api_features = api_features.split('\n')
+        if FEATURE_REDUCE:
+            api_features = [i for i in api_features if i not in white_list]
 
     with open("hybrid_samples.txt") as samples:
         for s in samples:
@@ -54,10 +76,14 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
                                              single_file=True)
             file_apis = labeled_api_data(root_dir=s, api_features=api_features, malware=api_features,
                                          single_file=True)
-            file_permissions = labeled_permissions_data(root_dir=s)
+            if FEATURE_REDUCE:
+                file_permissions = labeled_permissions_data(root_dir=s, permissions_file='reduced_permissions.txt')
+            else:
+                file_permissions = labeled_permissions_data(root_dir=s)
             file_intents = labeled_intent_data(root_dir=s, intent_features=intent_features,
                                                single_file=True)
 
+            row = file_intents | file_permissions | file_apis | file_ngrams
             if not single_file:
                 if malware:
                     if os.path.isfile(f'malware_hybrid_{str(n_count)}.csv'):
@@ -84,8 +110,12 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
 
 
 def extract():
-    print(f'extracting malware hybrid data...')
-    labeled_hybrid_data(root_dir='./samples/malware_samples/decompiled', malware=True, n_count=5)
+    if FEATURE_REDUCE:
+        white_list = feature_reduction()
+    else:
+        white_list = []
+    print(f'extracting malware hybrid dsample_md5sata...')
+    labeled_hybrid_data(root_dir='./samples/malware_samples/decompiled', malware=True, n_count=5, white_list=white_list)
     print(f'extracting benign hybrid data...')
-    labeled_hybrid_data(root_dir='./samples/benign_samples/decompiled', malware=False, n_count=5)
+    labeled_hybrid_data(root_dir='./samples/benign_samples/decompiled', malware=False, n_count=5, white_list=white_list)
     print(f'finished extracting hybrid data...')
