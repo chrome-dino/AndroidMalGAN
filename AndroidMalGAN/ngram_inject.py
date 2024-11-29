@@ -39,7 +39,7 @@ def ngram_to_opcode(ngram):
 def inject(input_file):
     os.system('rm -rf temp_file_dir')
     ngram_generator = NgramGenerator()
-    ngram_generator.load_state_dict(torch.load(SAVED_MODEL_PATH))
+    ngram_generator.load_state_dict(torch.load(SAVED_MODEL_PATH)).to(DEVICE)
     ngram_generator.eval()
 
     with open('ngram_features.txt', 'r') as file:

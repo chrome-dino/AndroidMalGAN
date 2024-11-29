@@ -14,13 +14,23 @@ import hummingbird.ml.operator_converters.constants
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
+from ray import train, tune
+from ray.tune.schedulers import ASHAScheduler
+from functools import partial
+import ray
+import os
+import json
 
-config = configparser.ConfigParser()
-config.read("settings.ini")
+
+# config = configparser.ConfigParser()
+# config.read("settings.ini")
 
 BATCH_SIZE = 150
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
+RAY_TUNE = False
+NUM_EPOCHS = 1000
+SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/opcode_ngram_'
 
 
 class Classifier(nn.Module):
@@ -47,9 +57,12 @@ class Classifier(nn.Module):
         return x
 
 
-def train_mlp(data_benign, data_malware):
-    discriminator = Classifier(l2=classifier['l1'], l3=classifier['l2'],
-                                    l4=classifier['l3'])
+def train_mlp(config, data_benign=None, data_malware=None, model=''):
+    os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
+    classifier = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
+    discriminator = Classifier(l2=classifier['l1'], l3=classifier['l2'], l4=classifier['l3'])
+    learning_rate_disc = config['lr_disc']
+    l2lambda_disc = config['l2_lambda_dis']
     lossfun = nn.BCELoss()
 
     disc_optimizer = torch.optim.Adam(discriminator.parameters(), lr=learning_rate_disc, weight_decay=l2lambda_disc,
@@ -73,7 +86,9 @@ def train_mlp(data_benign, data_malware):
         disc_optimizer.zero_grad()
         disc_loss.backward()
         disc_optimizer.step()
-    torch.save(discriminator.state_dict(), SAVED_MODEL_PATH + bb_name + f'_{str(N_COUNT)}.pth')
+        if RAY_TUNE:
+            ray.train.report(dict(d_loss=disc_loss.item()))
+    torch.save(discriminator.state_dict(), SAVED_MODEL_PATH + model + '_mlp.pth')
     return
 
 
@@ -100,9 +115,9 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
         # partition = [.8, .2]
         # use scikitlearn to split the data
         train_data_benign, data_tensor_benign, train_labels_benign, test_labels_benign = train_test_split(
-            data_tensor_benign, labels_benign, test_size=partition[1])
+            data_tensor_benign, labels_benign, test_size=partition[1], random_state=42)
         train_data_malware, data_tensor_malware, train_labels_malware, test_labels_malware = train_test_split(
-            data_tensor_malware, labels_malware, test_size=partition[1])
+            data_tensor_malware, labels_malware, test_size=partition[1], random_state=42)
     data_tensor_malware = torch.split(data_tensor_malware, list(data_tensor_benign.size())[0])[0]
 
     benign_labels = torch.ones(list(data_tensor_benign.size())[0], 1)
@@ -175,7 +190,56 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('LR Accuracy')
     print(str(accuracy_score(yTest, yPredict) * 100))
 
-    train_mlp(data_tensor_benign, data_tensor_malware)
+    if RAY_TUNE:
+        tune_config = {
+            "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+            "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
+            "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
+            "lr_disc": tune.uniform(0.001, 0.1),
+            "l2_lambda_disc": tune.uniform(0.001, 0.1),
+            "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
+        }
+
+        scheduler = ASHAScheduler(
+            metric="d_loss",
+            mode="min",
+            max_t=NUM_EPOCHS,
+            grace_period=60,
+            reduction_factor=2,
+        )
+        result = tune.run(
+            partial(train_mlp, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type),
+            config=tune_config,
+            num_samples=10000,
+            scheduler=scheduler,
+            resources_per_trial={"cpu": 4, "gpu": 1},
+        )
+        best_trial = result.get_best_trial("g_loss", "min", "last")
+        best_config_gen = result.get_best_config(metric="g_loss", mode="min")
+        best_config_disc = result.get_best_config(metric="d_loss", mode="min")
+        print(f"Best trial config: {best_trial.config}")
+        print(f"Best trial final loss: {best_trial.last_result['g_loss']}")
+        print(f"Best trial final accuracy: {best_trial.last_result['accuracy']}")
+
+        print("Best config gen:", best_config_gen)
+        print("Best config disc:", best_config_disc)
+
+        mlp_config = {
+            "c_1": best_config_disc['c_1'],
+            "c_2": best_config_disc['c_2'],
+            "c_3": best_config_disc['c_3'],
+            "lr_disc": best_config_disc['lr_disc'],
+            "l2_lambda_disc": best_config_disc['l2_lambda_disc'],
+            "batch_size": best_config_gen['batch_size'],
+        }
+
+        with open(f'config_{model_type}_mlp.json', 'w') as f:
+            json.dump(mlp_config, f)
+
+    else:
+        with open(f'config_{model_type}_mlp.json', 'r') as f:
+            mlp_config = json.load(f)
+            train_mlp(mlp_config, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type)
 
     torch_dt = torch.load(f'dt_{model_type}_model.pth')
     # torch_rf.eval()

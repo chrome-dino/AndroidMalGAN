@@ -14,7 +14,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def inject(input_file):
     os.system('rm -rf temp_file_dir')
     api_generator = ApisGenerator()
-    api_generator.load_state_dict(torch.load(SAVED_MODEL_PATH))
+    api_generator.load_state_dict(torch.load(SAVED_MODEL_PATH)).to(DEVICE)
     api_generator.eval()
 
     with open('api_features.txt', 'r') as file:

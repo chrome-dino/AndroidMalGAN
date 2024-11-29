@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve
-from train_blackbox import train_blackbox
+from train_blackbox import train_blackbox, Classifier
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
 
 from ray import train, tune
@@ -123,18 +123,18 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
     # use scikitlearn to split the data
     if SPLIT_DATA:
         data_tensor_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
-            data_tensor_benign, labels_benign, test_size=0.4)
+            data_tensor_benign, labels_benign, test_size=0.4, random_state=42)
         data_tensor_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
-            data_tensor_malware, labels_malware, test_size=0.4)
+            data_tensor_malware, labels_malware, test_size=0.4, random_state=42)
     train_data_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
-        data_tensor_benign, labels_benign, test_size=partition[1])
+        data_tensor_benign, labels_benign, test_size=partition[1], random_state=42)
     dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_benign,
-        test_labels_benign, test_size=partition[1]/(partition[1] + partition[2]))
+        test_labels_benign, test_size=partition[1]/(partition[1] + partition[2]), random_state=42)
 
     train_data_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
-        data_tensor_malware, labels_malware, test_size=partition[1])
+        data_tensor_malware, labels_malware, test_size=partition[1], random_state=42)
     dev_data_malware, test_data_malware, dev_labels_malware, test_labels_malware = train_test_split(
-        test_data_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]))
+        test_data_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]), random_state=42)
 
     # then convert them into PyTorch Datasets (note: already converted to tensors)
     # train_data_benign = TensorDataset(train_d`a`ta_benign, train_labels_benign)
@@ -223,7 +223,10 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
             blackbox = blackbox.to(DEVICE)
         # with torch.no_grad():
         # bb_benign_labels = blackbox(benign).to(DEVICE)
-        results = blackbox.predict_proba(benign)
+        if bb_name == 'mlp':
+            results = blackbox(benign)
+        else:
+            results = blackbox.predict_proba(benign)
         # if svm
         if bb_name == 'svm':
             results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -234,7 +237,10 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
         # bb_benign_labels = torch.where(bb_benign_labels > .5, 0.0, 1.0)
         # bb_benign_labels = torch.where(bb_benign_labels > 0.5, 1.0, 0.0)
         # bb_mal_labels = blackbox(gen_malware).to(DEVICE)
-        results = blackbox.predict_proba(gen_malware)
+        if bb_name == 'mlp':
+            results = blackbox(gen_malware)
+        else:
+            results = blackbox.predict_proba(gen_malware)
         # if svm
         if bb_name == 'svm':
             results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -309,7 +315,10 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
             if bb_name == 'rf':
                 gen_malware = gen_malware.to(DEVICE_CPU)
 
-            results = blackbox.predict_proba(gen_malware)[:, -1]
+            if bb_name == 'mlp':
+                results = blackbox(gen_malware)[:, -1]
+            else:
+                results = blackbox.predict_proba(gen_malware)[:, -1]
             if bb_name == 'svm':
                 results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
 
@@ -336,8 +345,10 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
 
             if bb_name == 'rf':
                 gen_malware = gen_malware.to(DEVICE_CPU)
-
-            results = blackbox.predict_proba(gen_malware)[:, -1]
+            if bb_name == 'mlp':
+                results = blackbox(gen_malware)[:, -1]
+            else:
+                results = blackbox.predict_proba(gen_malware)[:, -1]
             if bb_name == 'svm':
                 results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
 
@@ -428,6 +439,7 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
     sys.stdout.write('\nMalGAN training finished!\n')
     # use test data?
 
+    torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + f'_{str(N_COUNT)}.pth')
     if not RAY_TUNE:
         fig, ax = plt.subplots(1, 3, figsize=(18, 5))
 
@@ -465,7 +477,6 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
         plt.close(fig)
         # plt.show()
 
-        torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + f'_{str(N_COUNT)}.pth')
     # diff = False
     # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
     #     if p1.data.ne(p2.data).sum() > 0:
@@ -711,8 +722,13 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
     binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
     binarized_gen_malware_logical_or = torch.logical_or(test_data_malware, binarized_gen_malware).float()
     gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
-    results = blackbox.predict_proba(test_data_malware)
-    results_benign = blackbox.predict_proba(test_data_benign)
+    if bb_name == 'mlp':
+        results = blackbox(test_data_malware)
+        results_benign = blackbox(test_data_benign)
+    else:
+        results = blackbox.predict_proba(test_data_malware)
+        results_benign = blackbox.predict_proba(test_data_benign)
+
     # if svm
     if bb_name == 'svm':
         results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -749,7 +765,10 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
     recall_mal_ben = tp_mal / (tp_mal + fn_mal)
     f1_mal_ben = 2 * (1 / ((1 / precision_mal_ben) + (1 / recall_mal_ben)))
 
-    results = blackbox.predict_proba(gen_malware)
+    if bb_name == 'mlp':
+        results = blackbox(gen_malware)
+    else:
+        results = blackbox.predict_proba(gen_malware)
     # if svm
     if bb_name == 'svm':
         results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -805,16 +824,23 @@ def train():
     if RAY_TUNE:
         ray.init()
     if TRAIN_BLACKBOX:
-        train_blackbox(f'malware_ngram_{str(N_COUNT)}.csv', f'benign_ngram_{str(N_COUNT)}.csv', 'ngram')
+        train_blackbox(f'malware_ngram_{str(N_COUNT)}.csv', f'benign_ngram_{str(N_COUNT)}.csv', f'ngram_{str(N_COUNT)}', split_data=SPLIT_DATA)
     # blackbox = BlackBoxDetector()
     # blackbox.load_state_dict(torch.load(BB_SAVED_MODEL_PATH))
     # blackbox.eval()
     # blackbox = torch.load('dt_model.pth')
 
     for bb_model in BB_MODELS:
-        blackbox = torch.load(bb_model['path'])
-        blackbox = blackbox.to(DEVICE)
+        if bb_model['name'] != 'mlp':
+            blackbox = torch.load(bb_model['path'])
+            blackbox = blackbox.to(DEVICE)
+        else:
+            # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
+            blackbox = Classifier()
 
+            blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{str(N_COUNT)}_mlp.pth'))
+            blackbox = blackbox.to(DEVICE)
+            blackbox.eval()
         # result = tune.run(
         #     partial(train_ngram_model, data_dir=data_dir),
         #     # resources_per_trial={"cpu": 2, "gpu": gpus_per_trial},
@@ -881,7 +907,7 @@ def train():
                 json.dump(config, f)
 
         else:
-            with open('config_ngrams.json', 'r') as f:
+            with open('config_ngram.json', 'r') as f:
                 config = json.load(f)
                 train_ngram_model(config, blackbox=blackbox, bb_name=bb_model['name'])
         # losses, ngram_generator, discriminator, disDecs, test_data_malware = (

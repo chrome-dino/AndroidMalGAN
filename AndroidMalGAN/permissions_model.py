@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve
-from train_blackbox import train_blackbox
+from train_blackbox import train_blackbox, Classifier
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
 
 from ray import train, tune
@@ -44,6 +44,7 @@ BATCH_SIZE = 150
 NOISE = 0
 TRAIN_BLACKBOX = False
 RAY_TUNE = False
+SPLIT_DATA = False
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/permissions_'
@@ -94,17 +95,20 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
     partition = [.8, .1, .1]
     # partition = [.8, .2]
     # use scikitlearn to split the data
+    if SPLIT_DATA:
+        data_tensor_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
+            data_tensor_benign, labels_benign, test_size=0.4, random_state=42)
+        data_tensor_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
+            data_tensor_malware, labels_malware, test_size=0.4, random_state=42)
     train_data_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
-        data_tensor_benign, labels_benign, test_size=partition[1])
+        data_tensor_benign, labels_benign, test_size=partition[1], random_state=42)
     dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_benign,
-        test_labels_benign, test_size=partition[1] / (partition[1] + partition[2]))
-    # dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_tensor_benign,
-    #     test_labels_benign, test_size=partition[1]/(partition[1] + partition[2]))
+        test_labels_benign, test_size=partition[1]/(partition[1] + partition[2]), random_state=42)
 
     train_data_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
-        data_tensor_malware, labels_malware, test_size=partition[1])
+        data_tensor_malware, labels_malware, test_size=partition[1], random_state=42)
     dev_data_malware, test_data_malware, dev_labels_malware, test_labels_malware = train_test_split(
-        test_data_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]))
+        test_data_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]), random_state=42)
 
     # last_loss = float('inf')
     # early_stoppage_counter = 0
@@ -143,7 +147,10 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
             blackbox = blackbox.to(DEVICE)
         # with torch.no_grad():
         # bb_benign_labels = blackbox(benign).to(DEVICE)
-        results = blackbox.predict_proba(benign)
+        if bb_name == 'mlp':
+            results = blackbox(benign)
+        else:
+            results = blackbox.predict_proba(benign)
         # if svm
         if bb_name == 'svm':
             results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -151,7 +158,10 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
         results = np.array([[row[1]] for row in results])
         bb_benign_labels = torch.from_numpy(results).type(torch.float32).to(DEVICE)
 
-        results = blackbox.predict_proba(gen_malware)
+        if bb_name == 'mlp':
+            results = blackbox(gen_malware)
+        else:
+            results = blackbox.predict_proba(gen_malware)
         # if svm
         if bb_name == 'svm':
             results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -213,7 +223,10 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
             if bb_name == 'rf':
                 gen_malware = gen_malware.to(DEVICE_CPU)
 
-            results = blackbox.predict_proba(gen_malware)[:, -1]
+            if bb_name == 'mlp':
+                results = blackbox(gen_malware)[:, -1]
+            else:
+                results = blackbox.predict_proba(gen_malware)[:, -1]
             if bb_name == 'svm':
                 results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
 
@@ -241,7 +254,10 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
             if bb_name == 'rf':
                 gen_malware = gen_malware.to(DEVICE_CPU)
 
-            results = blackbox.predict_proba(gen_malware)[:, -1]
+            if bb_name == 'mlp':
+                results = blackbox(gen_malware)[:, -1]
+            else:
+                results = blackbox.predict_proba(gen_malware)[:, -1]
             if bb_name == 'svm':
                 results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
 
@@ -269,7 +285,7 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
             # start = start + BATCH_SIZE
     sys.stdout.write('\nMalGAN training finished!\n')
     # use test data?
-
+    torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
     if not RAY_TUNE:
         fig, ax = plt.subplots(1, 3, figsize=(18, 5))
 
@@ -307,7 +323,7 @@ def train_permissions_model(config, blackbox=None, bb_name=''):
         plt.close(fig)
     # plt.show()
 
-        torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
+
     # diff = False
     # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
     #     if p1.data.ne(p2.data).sum() > 0:
@@ -556,8 +572,12 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
     binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
     binarized_gen_malware_logical_or = torch.logical_or(test_data_malware, binarized_gen_malware).float()
     gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
-    results = blackbox.predict_proba(test_data_malware)
-    results_benign = blackbox.predict_proba(test_data_benign)
+    if bb_name == 'mlp':
+        results = blackbox(test_data_malware)
+        results_benign = blackbox(test_data_benign)
+    else:
+        results = blackbox.predict_proba(test_data_malware)
+        results_benign = blackbox.predict_proba(test_data_benign)
     # if svm
     if bb_name == 'svm':
         results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -594,7 +614,10 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
     recall_mal_ben = tp_mal / (tp_mal + fn_mal)
     f1_mal_ben = 2 * (1 / ((1 / precision_mal_ben) + (1 / recall_mal_ben)))
 
-    results = blackbox.predict_proba(gen_malware)
+    if bb_name == 'mlp':
+        results = blackbox(gen_malware)
+    else:
+        results = blackbox.predict_proba(gen_malware)
     # if svm
     if bb_name == 'svm':
         results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -649,7 +672,7 @@ def train():
     if RAY_TUNE:
         ray.init()
     if TRAIN_BLACKBOX:
-        train_blackbox('malware_permissions.csv', 'benign_permissions.csv', 'permissions')
+        train_blackbox('malware_permissions.csv', 'benign_permissions.csv', 'permissions', split_data=SPLIT_DATA)
 
     scheduler = ASHAScheduler(
         metric="g_loss",
@@ -660,8 +683,15 @@ def train():
     )
 
     for bb_model in BB_MODELS:
-        blackbox = torch.load(bb_model['path'])
-        blackbox = blackbox.to(DEVICE)
+        if bb_model['name'] != 'mlp':
+            blackbox = torch.load(bb_model['path'])
+            blackbox = blackbox.to(DEVICE)
+        else:
+            blackbox = Classifier()
+
+            blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + '_mlp.pth'))
+            blackbox = blackbox.to(DEVICE)
+            blackbox.eval()
         if RAY_TUNE:
             tune_config = {
                 "g_noise": tune.choice([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]),
