@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve
 from train_blackbox import train_blackbox, Classifier
+from ensemble_blackbox import validate_ensemble
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
 
 from ray import train, tune
@@ -336,15 +337,14 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         ax[4].set_title(f'hybrid Model Accuracy ({str(bb_name)})')
         ax[4].legend(['Test', 'Dev'])
 
-        plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', 'hybrid_' + bb_name + '.png'), bbox_inches='tight')
+        plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', f'hybrid_{str(N_COUNT)}_' + bb_name + '.png'), bbox_inches='tight')
         plt.close(fig)
         # plt.show()
-
-
 
     if not RAY_TUNE:
         print('Testing final model')
         validate(generator, blackbox, bb_name, test_data_malware, test_data_benign)
+        validate_ensemble(generator, bb_name, f'hybrid_{str(N_COUNT)}', test_data_malware, test_data_benign)
     print('##############################################################################')
 
     return
@@ -575,12 +575,46 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
         df = pd.DataFrame([results])
         df.to_csv(f'results.csv')
 
+    for bb_model in BB_MODELS:
+        if bb_model['name'] == bb_name:
+            continue
+        if bb_model['name'] != 'mlp':
+            bb = torch.load(bb_model['path'])
+            bb = bb.to(DEVICE)
+        else:
+            # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
+            bb = Classifier()
+            bb.load_state_dict(torch.load(SAVED_MODEL_PATH + '_mlp.pth'))
+            bb = bb.to(DEVICE)
+            bb.eval()
+
+        if bb_model['name'] == 'mlp':
+            results = bb(gen_malware)
+        else:
+            results = bb.predict_proba(gen_malware)
+        if bb_model['name'] == 'svm':
+            results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+        # results = torch.where(results > 0.5, True, False)
+        mal = 0
+        ben = 0
+        for result in results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'{bb_name} hybrid malgan tested against {bb_model["name"]}: {str(ben)} benign files and {str(mal)} malicious files'
+        print(result_str)
+        with open('blackbox_crosscheck_hybrid.txt', 'a') as f:
+            f.write(result_str + '\n')
+
 
 def train():
     if RAY_TUNE:
         ray.init()
     if TRAIN_BLACKBOX:
-        train_blackbox(f'malware_hybrid_{str(N_COUNT)}.csv', f'benign_hybrid_{str(N_COUNT)}.csv', 'hybrid', split_data=SPLIT_DATA)
+        train_blackbox(f'malware_hybrid_{str(N_COUNT)}.csv', f'benign_hybrid_{str(N_COUNT)}.csv', f'hybrid_{str(N_COUNT)}', split_data=SPLIT_DATA)
+    if os.path.exists('blackbox_crosscheck_hybrid.txt'):
+        os.remove('blackbox_crosscheck_hybrid.txt')
 
     for bb_model in BB_MODELS:
         if bb_model['name'] != 'mlp':
@@ -657,3 +691,12 @@ def train():
                 train_hybrid_model(config, blackbox=blackbox, bb_name=bb_model['name'])
 
     print('Finished!')
+
+
+    def validate_against_single_malgan():
+        # generate x number of malicious sha1s
+        # inject api
+        # single extract hybrid
+        # test against hybrid black boxes
+        # repeat for other models
+        pass

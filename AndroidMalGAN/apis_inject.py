@@ -11,7 +11,7 @@ SAVED_MODEL_PATH = './opcode_ngram_malgan.pth'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def inject(input_file):
+def inject(input_file, copy_file=False):
     os.system('rm -rf temp_file_dir')
     api_generator = ApisGenerator()
     api_generator.load_state_dict(torch.load(SAVED_MODEL_PATH)).to(DEVICE)
@@ -22,11 +22,11 @@ def inject(input_file):
         api_features = api_features.split('\n')
 
     filename = os.path.basename(input_file).split('.')[0]
-    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o {filename}')
+    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir/{filename}')
     command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
-    data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features, malware=api_features,
+    data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features,
                                     single_file=True)
     # df = pd.DataFrame(data_malware)
     # df.to_csv('temp_file_dir/malware_ngram.csv')
@@ -81,8 +81,12 @@ def inject(input_file):
     with open(inject_file, 'a') as file:
         file.write(smali_inject)
 
-    print(f'Compiling file: {filename} with command: apktool b {input_file}')
-    command = f'apktool b {input_file}'
+    if copy_file:
+        print(f'Compiling file: {filename} with command: apktool b modified_{input_file}')
+        command = f'apktool b {input_file}'
+    else:
+        print(f'Compiling file: {filename} with command: apktool b {input_file}')
+        command = f'apktool b {input_file}'
     command = command.split()
     subprocess.run(command)
     print(f'Finished!')

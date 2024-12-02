@@ -75,7 +75,7 @@ def feature_reduction(n_count=5):
     return
 
 
-def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=False, white_list=None):
+def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=False):
     sample_md5s = []
     if not single_file:
         if malware:

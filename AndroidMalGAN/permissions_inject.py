@@ -9,14 +9,14 @@ SAVED_MODEL_PATH = './permissions_malgan.pth'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def inject(input_file):
+def inject(input_file, copy_file=False):
     os.system('rm -rf temp_file_dir')
     permissions_generator = PermissionsGenerator()
     permissions_generator.load_state_dict(torch.load(SAVED_MODEL_PATH)).to(DEVICE)
     permissions_generator.eval()
 
     filename = os.path.basename(input_file).split('.')[0]
-    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o {filename}')
+    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir/{filename}')
     command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
@@ -53,8 +53,12 @@ def inject(input_file):
         # Write the modified XML back to the file
         tree.write('AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
 
-    print(f'Compiling file: {filename} with command: apktool b {input_file}')
-    command = f'apktool b {input_file}'
+    if copy_file:
+        print(f'Compiling file: {filename} with command: apktool b modified_{input_file}')
+        command = f'apktool b {input_file}'
+    else:
+        print(f'Compiling file: {filename} with command: apktool b {input_file}')
+        command = f'apktool b {input_file}'
     command = command.split()
     subprocess.run(command)
     print(f'Finished!')

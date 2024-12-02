@@ -36,23 +36,23 @@ def ngram_to_opcode(ngram):
     return final
 
 
-def inject(input_file):
+def inject(input_file, copy_file=False, n_count=5):
     os.system('rm -rf temp_file_dir')
     ngram_generator = NgramGenerator()
     ngram_generator.load_state_dict(torch.load(SAVED_MODEL_PATH)).to(DEVICE)
     ngram_generator.eval()
 
-    with open('ngram_features.txt', 'r') as file:
+    with open(f'ngram_features_{str(n_count)}.txt', 'r') as file:
         ngram_features = file.read()
         ngram_features = ngram_features.split('\n')
 
     filename = os.path.basename(input_file).split('.')[0]
-    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o {filename}')
+    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir/{filename}')
     command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
 
-    data_malware = labeled_data(root_dir='temp_file_dir', ngram_features=ngram_features, single_file=True)
+    data_malware = labeled_data(root_dir='temp_file_dir', ngram_features=ngram_features, single_file=True, n_count=n_count)
     # df = pd.DataFrame(data_malware)
     # df.to_csv('temp_file_dir/malware_ngram.csv')
     # data_malware = np.loadtxt('temp_file_dir/malware_ngram.csv', delimiter=',')
@@ -105,8 +105,12 @@ def inject(input_file):
     with open(inject_file, 'a') as file:
         file.write(smali_inject)
 
-    print(f'Compiling file: {filename} with command: apktool b {input_file}')
-    command = f'apktool b {input_file}'
+    if copy_file:
+        print(f'Compiling file: {filename} with command: apktool b modified_{input_file}')
+        command = f'apktool b {input_file}'
+    else:
+        print(f'Compiling file: {filename} with command: apktool b {input_file}')
+        command = f'apktool b {input_file}'
     command = command.split()
     subprocess.run(command)
     print(f'Finished!')

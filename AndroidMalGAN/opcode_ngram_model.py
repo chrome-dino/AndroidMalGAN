@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve
 from train_blackbox import train_blackbox, Classifier
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
+from ensemble_blackbox import validate_ensemble
 
 from ray import train, tune
 from ray.tune.schedulers import ASHAScheduler
@@ -50,6 +51,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/opcode_ngram_'
 SAVED_BEST_MODEL_PATH = 'opcode_ngram_malgan_best.pth'
+TEST_HYBRID = False
 
 MALWARE_CSV = f'/home/dsu/Documents/AndroidMalGAN/malware_ngram_{str(N_COUNT)}.csv'
 BENIGN_CSV = f'/home/dsu/Documents/AndroidMalGAN/benign_ngram_{str(N_COUNT)}.csv'
@@ -473,7 +475,7 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
         ax[4].set_title(f'Ngram Opcode Model Accuracy ({str(bb_name)})')
         ax[4].legend(['Test', 'Dev'])
 
-        plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', 'ngram_' + bb_name + '.png'), bbox_inches='tight')
+        plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', f'ngram_{str(N_COUNT)}_' + bb_name + '.png'), bbox_inches='tight')
         plt.close(fig)
         # plt.show()
 
@@ -498,6 +500,7 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
     if not RAY_TUNE:
         print('Testing final model')
         validate(generator, blackbox, bb_name, test_data_malware, test_data_benign)
+        validate_ensemble(generator, bb_name, f'ngram_{str(N_COUNT)}', test_data_malware, test_data_benign)
     # test_data_malware = test_data_malware.to(DEVICE)
     # results = discriminator(test_data_malware)
     # # print(results)
@@ -819,6 +822,38 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
         df = pd.DataFrame([results])
         df.to_csv(f'results.csv')
 
+    for bb_model in BB_MODELS:
+        if bb_model['name'] == bb_name:
+            continue
+        if bb_model['name'] != 'mlp':
+            bb = torch.load(bb_model['path'])
+            bb = bb.to(DEVICE)
+        else:
+            # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
+            bb = Classifier()
+            bb.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{str(N_COUNT)}_mlp.pth'))
+            bb = bb.to(DEVICE)
+            bb.eval()
+
+        if bb_model['name'] == 'mlp':
+            results = bb(gen_malware)
+        else:
+            results = bb.predict_proba(gen_malware)
+        if bb_model['name'] == 'svm':
+            results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+        # results = torch.where(results > 0.5, True, False)
+        mal = 0
+        ben = 0
+        for result in results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'{bb_name} ngram {str(N_COUNT)} malgan tested against {bb_model["name"]}: {str(ben)} benign files and {str(mal)} malicious files'
+        print(result_str)
+        with open(f'blackbox_crosscheck_ngram_{str(N_COUNT)}.txt', 'a') as f:
+            f.write(result_str + '\n')
+
 
 def train():
     if RAY_TUNE:
@@ -830,6 +865,8 @@ def train():
     # blackbox.eval()
     # blackbox = torch.load('dt_model.pth')
 
+    if os.path.exists(f'blackbox_crosscheck_ngram_{str(N_COUNT)}.txt'):
+        os.remove(f'blackbox_crosscheck_ngram_{str(N_COUNT)}.txt')
     for bb_model in BB_MODELS:
         if bb_model['name'] != 'mlp':
             blackbox = torch.load(bb_model['path'])
@@ -837,7 +874,6 @@ def train():
         else:
             # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
             blackbox = Classifier()
-
             blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{str(N_COUNT)}_mlp.pth'))
             blackbox = blackbox.to(DEVICE)
             blackbox.eval()

@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve
 from train_blackbox import train_blackbox, Classifier
+from ensemble_blackbox import validate_ensemble
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
 
 from ray import train, tune
@@ -349,6 +350,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
     if not RAY_TUNE:
         print('Testing final model')
         validate(generator, blackbox, bb_name, test_data_malware, test_data_benign)
+        validate_ensemble(generator, bb_name, 'apis', test_data_malware, test_data_benign)
     # validate(generator, blackbox, bb_name, test_data_malware)
     # test_data_malware = test_data_malware.to(DEVICE)
     # results = discriminator(test_data_malware)
@@ -671,12 +673,46 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
         df = pd.DataFrame([results])
         df.to_csv(f'results.csv')
 
+    for bb_model in BB_MODELS:
+        if bb_model['name'] == bb_name:
+            continue
+        if bb_model['name'] != 'mlp':
+            bb = torch.load(bb_model['path'])
+            bb = bb.to(DEVICE)
+        else:
+            # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
+            bb = Classifier()
+            bb.load_state_dict(torch.load(SAVED_MODEL_PATH + '_mlp.pth'))
+            bb = bb.to(DEVICE)
+            bb.eval()
+
+        if bb_model['name'] == 'mlp':
+            results = bb(gen_malware)
+        else:
+            results = bb.predict_proba(gen_malware)
+        if bb_model['name'] == 'svm':
+            results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+        # results = torch.where(results > 0.5, True, False)
+        mal = 0
+        ben = 0
+        for result in results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'{bb_name} apis malgan tested against {bb_model["name"]}: {str(ben)} benign files and {str(mal)} malicious files'
+        print(result_str)
+        with open('blackbox_crosscheck_api.txt', 'a') as f:
+            f.write(result_str + '\n')
+
 
 def train():
     if RAY_TUNE:
         ray.init()
     if TRAIN_BLACKBOX:
         train_blackbox('malware_apis.csv', 'benign_apis.csv', 'apis', split_data=SPLIT_DATA)
+    if os.path.exists('blackbox_crosscheck_api.txt'):
+        os.remove('blackbox_crosscheck_api.txt')
 
     for bb_model in BB_MODELS:
         if bb_model['name'] != 'mlp':
