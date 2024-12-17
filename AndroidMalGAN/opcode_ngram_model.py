@@ -22,6 +22,8 @@ import matplotlib_inline
 
 import sys
 import os
+import logging
+from datetime import datetime
 
 matplotlib_inline.backend_inline.set_matplotlib_formats('svg')
 
@@ -43,7 +45,6 @@ L2_LAMBDA = 0.01
 BB_L2_LAMBDA = 0.01
 BATCH_SIZE = 150
 NOISE = 0
-N_COUNT = 3
 TRAIN_BLACKBOX = False
 RAY_TUNE = False
 SPLIT_DATA = False
@@ -53,14 +54,16 @@ SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/opcode_ngram_'
 SAVED_BEST_MODEL_PATH = 'opcode_ngram_malgan_best.pth'
 TEST_HYBRID = False
 
-MALWARE_CSV = f'/home/dsu/Documents/AndroidMalGAN/malware_ngram_{str(N_COUNT)}.csv'
-BENIGN_CSV = f'/home/dsu/Documents/AndroidMalGAN/benign_ngram_{str(N_COUNT)}.csv'
+
 # BB_SAVED_MODEL_PATH = 'opcode_ngram_blackbox.pth'
 
 os.environ['TUNE_DISABLE_STRICT_METRIC_CHECKING'] = '1'
 
+LOGGER = logging.getLogger(__name__)
+logging.basicConfig(filename=datetime.now().strftime('ngram_%H_%M_%d_%m_%Y.log'), encoding='utf-8', level=logging.INFO)
 
-def train_ngram_model(config, blackbox=None, bb_name=''):
+
+def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
     # num_epochs = 10000, batch_size = 150, learning_rate = 0.001, l2_lambda = 0.01, g_noise = 0, g_input = 0, g_1 = 0, g_2 = 0, g_3 = 0, c_input = 0, c_1 = 0, c_2 = 0, c_3 = 0
     os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
     classifier_params = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
@@ -77,14 +80,16 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
     generator = generator.to(DEVICE)
     # with open('malware_ngram.csv') as f:
     #     ncols = len(f.readline().split(','))
-    data_malware = np.loadtxt(MALWARE_CSV, delimiter=',', skiprows=1)
+    malware_csv = f'/home/dsu/Documents/AndroidMalGAN/malware_ngram_{str(n_count)}.csv'
+    benign_csv = f'/home/dsu/Documents/AndroidMalGAN/benign_ngram_{str(n_count)}.csv'
+    data_malware = np.loadtxt(malware_csv, delimiter=',', skiprows=1)
     # data_malware = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
     data_malware = (data_malware.astype(np.bool_)).astype(float)
 
     # data_malware_gen = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1, usecols=range(0, 151))
     # with open('benign_ngram.csv') as f:
     #     ncols = len(f.readline().split(','))
-    data_benign = np.loadtxt(BENIGN_CSV, delimiter=',', skiprows=1)
+    data_benign = np.loadtxt(benign_csv, delimiter=',', skiprows=1)
     data_benign = (data_benign.astype(np.bool_)).astype(float)
     labels_benign = data_benign[:, 0]
     data_benign = data_benign[:, 1:]
@@ -167,6 +172,7 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
     disDecs = np.zeros((NUM_EPOCHS, 2))  # disDecs = discriminator decisions
     disDecs_dev = np.zeros((NUM_EPOCHS, 2))
     acc_test_dev = np.zeros((NUM_EPOCHS, 2))
+    LOGGER.info('Training MalGAN Model: ' + bb_name)
     print('Training MalGAN Model: ' + bb_name)
     for e in range(NUM_EPOCHS):
         # start = 0
@@ -441,7 +447,7 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
     sys.stdout.write('\nMalGAN training finished!\n')
     # use test data?
 
-    torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + f'_{str(N_COUNT)}.pth')
+    torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + f'_{str(n_count)}.pth')
     if not RAY_TUNE:
         fig, ax = plt.subplots(1, 3, figsize=(18, 5))
 
@@ -475,7 +481,7 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
         ax[4].set_title(f'Ngram Opcode Model Accuracy ({str(bb_name)})')
         ax[4].legend(['Test', 'Dev'])
 
-        plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', f'ngram_{str(N_COUNT)}_' + bb_name + '.png'), bbox_inches='tight')
+        plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', f'ngram_{str(n_count)}_' + bb_name + '.png'), bbox_inches='tight')
         plt.close(fig)
         # plt.show()
 
@@ -498,9 +504,14 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
     # print('############################################################')
 
     if not RAY_TUNE:
+        LOGGER.info('*******************************************************************************************************')
+        print('*******************************************************************************************************')
+        LOGGER.info('Testing final model')
         print('Testing final model')
-        validate(generator, blackbox, bb_name, test_data_malware, test_data_benign)
-        validate_ensemble(generator, bb_name, f'ngram_{str(N_COUNT)}', test_data_malware, test_data_benign)
+        validate(generator, blackbox, bb_name, test_data_malware, test_data_benign, n_count)
+        validate_ensemble(generator, bb_name, f'ngram_{str(n_count)}', test_data_malware, test_data_benign)
+        LOGGER.info('*******************************************************************************************************')
+        print('*******************************************************************************************************')
     # test_data_malware = test_data_malware.to(DEVICE)
     # results = discriminator(test_data_malware)
     # # print(results)
@@ -512,7 +523,6 @@ def train_ngram_model(config, blackbox=None, bb_name=''):
     #     else:
     #         mal += 1
     # print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
-    print('##############################################################################')
 
     return
 
@@ -714,7 +724,7 @@ class NgramGenerator(nn.Module):
         return x
 
 
-def validate(generator, blackbox, bb_name, data_malware, data_benign):
+def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
     generator.eval()
     generator.to(DEVICE)
     blackbox.to(DEVICE)
@@ -744,7 +754,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
             ben += 1
         else:
             mal += 1
-
+    LOGGER.info(f'test set benign predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
     print(f'test set benign predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
     acc_ben = ben / (ben + mal)
     tn = ben
@@ -757,7 +767,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
             ben += 1
         else:
             mal += 1
-
+    LOGGER.info(f'test set malware predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
     print(f'test set malware predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
     acc_mal = mal / (ben + mal)
     tp_mal = mal
@@ -783,7 +793,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
             ben += 1
         else:
             mal += 1
-
+    LOGGER.info(f'test set modified predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
     print(f'test set modified predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
     acc_gen = mal / (ben + mal)
     tp_gen = mal
@@ -798,7 +808,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
         diff = gen_malware[i] - test_data_malware[i]
         perturbations += diff.sum()
     perturbations = perturbations/len(gen_malware)
-    results = {'model': f'{str(N_COUNT)} gram opcode boolean',
+    results = {'model': f'{str(n_count)} gram opcode boolean',
                'black box': bb_name,
                'black box score benign': acc_ben,
                'black box score malware': acc_mal,
@@ -831,7 +841,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
         else:
             # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
             bb = Classifier()
-            bb.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{str(N_COUNT)}_mlp.pth'))
+            bb.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{str(n_count)}_mlp.pth'))
             bb = bb.to(DEVICE)
             bb.eval()
 
@@ -849,166 +859,181 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
                 ben += 1
             else:
                 mal += 1
-        result_str = f'{bb_name} ngram {str(N_COUNT)} malgan tested against {bb_model["name"]}: {str(ben)} benign files and {str(mal)} malicious files'
+        result_str = f'{bb_name} ngram {str(n_count)} malgan tested against {bb_model["name"]}: {str(ben)} benign files and {str(mal)} malicious files'
         print(result_str)
-        with open(f'blackbox_crosscheck_ngram_{str(N_COUNT)}.txt', 'a') as f:
+        LOGGER.info(result_str)
+        with open(f'blackbox_crosscheck_ngram_{str(n_count)}.txt', 'a') as f:
             f.write(result_str + '\n')
 
 
 def train():
-    if RAY_TUNE:
-        ray.init()
-    if TRAIN_BLACKBOX:
-        train_blackbox(f'malware_ngram_{str(N_COUNT)}.csv', f'benign_ngram_{str(N_COUNT)}.csv', f'ngram_{str(N_COUNT)}', split_data=SPLIT_DATA)
-    # blackbox = BlackBoxDetector()
-    # blackbox.load_state_dict(torch.load(BB_SAVED_MODEL_PATH))
-    # blackbox.eval()
-    # blackbox = torch.load('dt_model.pth')
-
-    if os.path.exists(f'blackbox_crosscheck_ngram_{str(N_COUNT)}.txt'):
-        os.remove(f'blackbox_crosscheck_ngram_{str(N_COUNT)}.txt')
-    for bb_model in BB_MODELS:
-        if bb_model['name'] != 'mlp':
-            blackbox = torch.load(bb_model['path'])
-            blackbox = blackbox.to(DEVICE)
-        else:
-            # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
-            blackbox = Classifier()
-            blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{str(N_COUNT)}_mlp.pth'))
-            blackbox = blackbox.to(DEVICE)
-            blackbox.eval()
-        # result = tune.run(
-        #     partial(train_ngram_model, data_dir=data_dir),
-        #     # resources_per_trial={"cpu": 2, "gpu": gpus_per_trial},
-        #     config=tune_config,
-        #     num_samples=num_samples,
-        #     scheduler=scheduler,
-        # )
+    for n in range(3, 11):
+        print('#######################################################################################################')
+        print(f'Starting training for {str(n)}-gram MalGAN')
+        print('#######################################################################################################')
+        LOGGER.info('#######################################################################################################')
+        LOGGER.info(f'Starting training for {str(n)}-gram MalGAN')
+        LOGGER.info('#######################################################################################################')
         if RAY_TUNE:
-            tune_config = {
-                "g_noise": tune.choice([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]),
-                "g_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
-                "g_2": tune.choice([1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000]),
-                "g_3": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
-                "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
-                "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
-                "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
-                "lr_gen": tune.uniform(0.001, 0.1),
-                "lr_disc": tune.uniform(0.001, 0.1),
-                "l2_lambda_gen": tune.uniform(0.001, 0.1),
-                "l2_lambda_disc": tune.uniform(0.001, 0.1),
-                "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
-            }
+            ray.init()
+        if TRAIN_BLACKBOX:
+            train_blackbox(f'malware_ngram_{str(n)}.csv', f'benign_ngram_{str(n)}.csv', f'ngram_{str(n)}', split_data=SPLIT_DATA)
+        # blackbox = BlackBoxDetector()
+        # blackbox.load_state_dict(torch.load(BB_SAVED_MODEL_PATH))
+        # blackbox.eval()
+        # blackbox = torch.load('dt_model.pth')
 
-            scheduler = ASHAScheduler(
-                metric="g_loss",
-                mode="min",
-                max_t=NUM_EPOCHS,
-                grace_period=60,
-                reduction_factor=2,
-            )
-            result = tune.run(
-                partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']),
-                config=tune_config,
-                num_samples=10000,
-                scheduler=scheduler,
-                resources_per_trial={"cpu": 4, "gpu": 1},
-            )
-            best_trial = result.get_best_trial("g_loss", "min", "last")
-            best_config_gen = result.get_best_config(metric="g_loss", mode="min")
-            best_config_disc = result.get_best_config(metric="d_loss", mode="min")
-            print(f"Best trial config: {best_trial.config}")
-            print(f"Best trial final loss: {best_trial.last_result['g_loss']}")
-            print(f"Best trial final accuracy: {best_trial.last_result['accuracy']}")
+        if os.path.exists(f'blackbox_crosscheck_ngram_{str(n)}.txt'):
+            os.remove(f'blackbox_crosscheck_ngram_{str(n)}.txt')
+        for bb_model in BB_MODELS:
+            if bb_model['name'] != 'mlp':
+                blackbox = torch.load(bb_model['path'])
+                blackbox = blackbox.to(DEVICE)
+            else:
+                # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
+                blackbox = Classifier()
+                blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{str(n)}_mlp.pth'))
+                blackbox = blackbox.to(DEVICE)
+                blackbox.eval()
+            # result = tune.run(
+            #     partial(train_ngram_model, data_dir=data_dir),
+            #     # resources_per_trial={"cpu": 2, "gpu": gpus_per_trial},
+            #     config=tune_config,
+            #     num_samples=num_samples,
+            #     scheduler=scheduler,
+            # )
+            if RAY_TUNE:
+                tune_config = {
+                    "g_noise": tune.choice([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]),
+                    "g_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+                    "g_2": tune.choice([1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000]),
+                    "g_3": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+                    "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+                    "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
+                    "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
+                    "lr_gen": tune.uniform(0.001, 0.1),
+                    "lr_disc": tune.uniform(0.001, 0.1),
+                    "l2_lambda_gen": tune.uniform(0.001, 0.1),
+                    "l2_lambda_disc": tune.uniform(0.001, 0.1),
+                    "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
+                }
 
-            print("Best config gen:", best_config_gen)
-            print("Best config disc:", best_config_disc)
+                scheduler = ASHAScheduler(
+                    metric="g_loss",
+                    mode="min",
+                    max_t=NUM_EPOCHS,
+                    grace_period=60,
+                    reduction_factor=2,
+                )
+                result = tune.run(
+                    partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']),
+                    config=tune_config,
+                    num_samples=2500,
+                    scheduler=scheduler,
+                    resources_per_trial={"cpu": 4, "gpu": 1},
+                    n_count=n
+                )
+                best_trial = result.get_best_trial("g_loss", "min", "last")
+                best_config_gen = result.get_best_config(metric="g_loss", mode="min")
+                best_config_disc = result.get_best_config(metric="d_loss", mode="min")
+                print(f"Best trial config: {best_trial.config}")
+                print(f"Best trial final loss: {best_trial.last_result['g_loss']}")
+                print(f"Best trial final accuracy: {best_trial.last_result['accuracy']}")
 
-            config = {
-                "g_noise": best_config_gen['g_noise'],
-                "g_1": best_config_gen['g_1'],
-                "g_2": best_config_gen['g_2'],
-                "g_3": best_config_gen['g_3'],
-                "c_1": best_config_disc['c_1'],
-                "c_2": best_config_disc['c_2'],
-                "c_3": best_config_disc['c_3'],
-                "lr_gen": best_config_gen['lr_gen'],
-                "lr_disc": best_config_disc['lr_disc'],
-                "l2_lambda_gen":  best_config_gen['l2_lambda_gen'],
-                "l2_lambda_disc": best_config_disc['l2_lambda_disc'],
-                "batch_size":  best_config_gen['batch_size'],
-            }
+                print("Best config gen:", best_config_gen)
+                print("Best config disc:", best_config_disc)
 
-            with open('config_ngram.json', 'w') as f:
-                json.dump(config, f)
+                LOGGER.info(f"Best trial config: {best_trial.config}")
+                LOGGER.info(f"Best trial final loss: {best_trial.last_result['g_loss']}")
+                LOGGER.info(f"Best trial final accuracy: {best_trial.last_result['accuracy']}")
+                LOGGER.info("Best config gen:", best_config_gen)
+                LOGGER.info("Best config disc:", best_config_disc)
+                config = {
+                    "g_noise": best_config_gen['g_noise'],
+                    "g_1": best_config_gen['g_1'],
+                    "g_2": best_config_gen['g_2'],
+                    "g_3": best_config_gen['g_3'],
+                    "c_1": best_config_disc['c_1'],
+                    "c_2": best_config_disc['c_2'],
+                    "c_3": best_config_disc['c_3'],
+                    "lr_gen": best_config_gen['lr_gen'],
+                    "lr_disc": best_config_disc['lr_disc'],
+                    "l2_lambda_gen":  best_config_gen['l2_lambda_gen'],
+                    "l2_lambda_disc": best_config_disc['l2_lambda_disc'],
+                    "batch_size":  best_config_gen['batch_size'],
+                }
 
-        else:
-            with open('config_ngram.json', 'r') as f:
-                config = json.load(f)
-                train_ngram_model(config, blackbox=blackbox, bb_name=bb_model['name'])
-        # losses, ngram_generator, discriminator, disDecs, test_data_malware = (
-        #     train_ngram_model(blackbox=blackbox, bb_name=bb_model['name'], num_epochs=10000, batch_size=150,
-        #                       learning_rate=0.001, l2_lambda=0.01, g_noise=0, g_input=0, g_1=0, g_2=0, g_3=0,
-        #                       c_input=0, c_1=0, c_2=0, c_3=0)
-        # )
+                with open('config_ngram.json', 'w') as f:
+                    json.dump(config, f)
+
+            else:
+                with open('config_ngram.json', 'r') as f:
+                    config = json.load(f)
+                    train_ngram_model(config, blackbox=blackbox, bb_name=bb_model['name'], n_count=n)
+            # losses, ngram_generator, discriminator, disDecs, test_data_malware = (
+            #     train_ngram_model(blackbox=blackbox, bb_name=bb_model['name'], num_epochs=10000, batch_size=150,
+            #                       learning_rate=0.001, l2_lambda=0.01, g_noise=0, g_input=0, g_1=0, g_2=0, g_3=0,
+            #                       c_input=0, c_1=0, c_2=0, c_3=0)
+            # )
 
 
 
 
 
-        # best_trained_model = NgramGenerator(best_trial.config["l1"], best_trial.config["l2"])
-        # device = "cpu"
-        # if torch.cuda.is_available():
-        #     device = "cuda:0"
-        #     if gpus_per_trial > 1:
-        #         best_trained_model = nn.DataParallel(best_trained_model)
-        # best_trained_model.to(device)
-        #
-        # best_checkpoint = result.get_best_checkpoint(trial=best_trial, metric="accuracy", mode="max")
-        # with best_checkpoint.as_directory() as checkpoint_dir:
-        #     data_path = Path(checkpoint_dir) / "data.pkl"
-        #     with open(data_path, "rb") as fp:
-        #         best_checkpoint_data = pickle.load(fp)
-        #
-        #     best_trained_model.load_state_dict(best_checkpoint_data["net_state_dict"])
-        #     test_acc = test_accuracy(best_trained_model, device)
-        #     print("Best trial test set accuracy: {}".format(test_acc))
+            # best_trained_model = NgramGenerator(best_trial.config["l1"], best_trial.config["l2"])
+            # device = "cpu"
+            # if torch.cuda.is_available():
+            #     device = "cuda:0"
+            #     if gpus_per_trial > 1:
+            #         best_trained_model = nn.DataParallel(best_trained_model)
+            # best_trained_model.to(device)
+            #
+            # best_checkpoint = result.get_best_checkpoint(trial=best_trial, metric="accuracy", mode="max")
+            # with best_checkpoint.as_directory() as checkpoint_dir:
+            #     data_path = Path(checkpoint_dir) / "data.pkl"
+            #     with open(data_path, "rb") as fp:
+            #         best_checkpoint_data = pickle.load(fp)
+            #
+            #     best_trained_model.load_state_dict(best_checkpoint_data["net_state_dict"])
+            #     test_acc = test_accuracy(best_trained_model, device)
+            #     print("Best trial test set accuracy: {}".format(test_acc))
 
-        # print(f'\nLosses: {str(losses)}')
-        # print(f'Training Accuracy: {str(trainAcc)}')
-        # print(f'Test Accuracy: {str(testAcc)}')
-        # print(disDecs)
-        # torch.save(best_model.state_dict(), SAVED_BEST_MODEL_PATH)
-        # torch.save(ngram_generator.state_dict(), SAVED_MODEL_PATH + bb_model['name'] + '.pth')
-        # # diff = False
-        # # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
-        # #     if p1.data.ne(p2.data).sum() > 0:
-        # #         diff = True
-        # #         break
-        # # if diff:
-        # #     print('models are different!')
-        # # else:
-        # #     print('models are same!')
-        # print('/////////////////////////////////////////////////////////////')
-        # # print(f'Generator model saved to: {SAVED_MODEL_PATH}')
-        # print(f'Testing with {str(NOISE)} noise inputs')
-        # # print(f'Testing best performing model (epoch: {str(best_epoch)})')
-        # # best_model = NgramGenerator(noise_dims=NOISE)
-        # # best_model.load_state_dict(torch.load(SAVED_BEST_MODEL_PATH))
-        # # validate(best_model, blackbox, test_data_malware)
-        # # print('############################################################')
-        # print('Testing final model')
-        # validate(ngram_generator, blackbox, bb_model['name'], test_data_malware)
-        # test_data_malware = test_data_malware.to(DEVICE)
-        # results = discriminator(test_data_malware)
-        # # print(results)
-        # mal = 0
-        # ben = 0
-        # for result in results:
-        #     if result[0] > 0.5:
-        #         ben += 1
-        #     else:
-        #         mal += 1
-        # print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
-        # print('##############################################################################')
+            # print(f'\nLosses: {str(losses)}')
+            # print(f'Training Accuracy: {str(trainAcc)}')
+            # print(f'Test Accuracy: {str(testAcc)}')
+            # print(disDecs)
+            # torch.save(best_model.state_dict(), SAVED_BEST_MODEL_PATH)
+            # torch.save(ngram_generator.state_dict(), SAVED_MODEL_PATH + bb_model['name'] + '.pth')
+            # # diff = False
+            # # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
+            # #     if p1.data.ne(p2.data).sum() > 0:
+            # #         diff = True
+            # #         break
+            # # if diff:
+            # #     print('models are different!')
+            # # else:
+            # #     print('models are same!')
+            # print('/////////////////////////////////////////////////////////////')
+            # # print(f'Generator model saved to: {SAVED_MODEL_PATH}')
+            # print(f'Testing with {str(NOISE)} noise inputs')
+            # # print(f'Testing best performing model (epoch: {str(best_epoch)})')
+            # # best_model = NgramGenerator(noise_dims=NOISE)
+            # # best_model.load_state_dict(torch.load(SAVED_BEST_MODEL_PATH))
+            # # validate(best_model, blackbox, test_data_malware)
+            # # print('############################################################')
+            # print('Testing final model')
+            # validate(ngram_generator, blackbox, bb_model['name'], test_data_malware)
+            # test_data_malware = test_data_malware.to(DEVICE)
+            # results = discriminator(test_data_malware)
+            # # print(results)
+            # mal = 0
+            # ben = 0
+            # for result in results:
+            #     if result[0] > 0.5:
+            #         ben += 1
+            #     else:
+            #         mal += 1
+            # print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
+            # print('##############################################################################')
+    LOGGER.info('Finished!')
     print('Finished!')
