@@ -101,7 +101,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     labels_benign = data_benign[:, 0]
     data_benign = data_benign[:, 1:]
 
-    labels_malware = data_benign[:, 0]
+    labels_malware = data_malware[:, 0]
     data_malware = data_malware[:, 1:]
 
     data_malware = np.array(data_malware)
