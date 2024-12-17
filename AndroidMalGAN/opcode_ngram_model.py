@@ -831,8 +831,11 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
     else:
         df = pd.DataFrame([results])
         df.to_csv(f'results.csv')
-
-    for bb_model in BB_MODELS:
+    bb_models = [{'name': 'rf', 'path': f'rf_ngram_{str(n_count)}_model.pth'}, {'name': 'dt', 'path': f'dt_ngram_{str(n_count)}_model.pth'},
+                 {'name': 'svm', 'path': f'svm_ngram_{str(n_count)}_model.pth'}, {'name': 'knn', 'path': f'knn_ngram_{str(n_count)}_model.pth'},
+                 {'name': 'gnb', 'path': f'gnb_ngram_{str(n_count)}_model.pth'}, {'name': 'lr', 'path': f'lr_ngram_{str(n_count)}_model.pth'},
+                 {'name': 'mlp', 'path': f'mlp_ngram_{str(n_count)}_model.pth'}]
+    for bb_model in bb_models:
         if bb_model['name'] == bb_name:
             continue
         if bb_model['name'] != 'mlp':
@@ -885,7 +888,14 @@ def train():
 
         if os.path.exists(f'blackbox_crosscheck_ngram_{str(n)}.txt'):
             os.remove(f'blackbox_crosscheck_ngram_{str(n)}.txt')
-        for bb_model in BB_MODELS:
+        bb_models = [{'name': 'rf', 'path': f'rf_ngram_{str(n)}_model.pth'},
+                     {'name': 'dt', 'path': f'dt_ngram_{str(n)}_model.pth'},
+                     {'name': 'svm', 'path': f'svm_ngram_{str(n)}_model.pth'},
+                     {'name': 'knn', 'path': f'knn_ngram_{str(n)}_model.pth'},
+                     {'name': 'gnb', 'path': f'gnb_ngram_{str(n)}_model.pth'},
+                     {'name': 'lr', 'path': f'lr_ngram_{str(n)}_model.pth'},
+                     {'name': 'mlp', 'path': f'mlp_ngram_{str(n)}_model.pth'}]
+        for bb_model in bb_models:
             if bb_model['name'] != 'mlp':
                 blackbox = torch.load(bb_model['path'])
                 blackbox = blackbox.to(DEVICE)
