@@ -1,14 +1,16 @@
+import numpy as np
 import torch
-from train_blackbox import Classifier
+from train_blackbox import Classifier2
 import os
 import pandas as pd
 import subprocess
 from opcode_ngram_feature_extract import labeled_data
 from other_apk_feature_extract import labeled_api_data
 from other_apk_feature_extract import labeled_intent_data
-from other_apk_feature_extract import labeled_permissions_data
+from other_apk_feature_extract import labeled_perm_data
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/'
 
 
@@ -26,6 +28,10 @@ def hybrid_ensemble_detector(bb_type='', input_file=''):
         intent_features = file.read()
         intent_features = intent_features.split('\n')
 
+    with open('perm_features.txt', 'r') as file:
+        perm_features = file.read()
+        perm_features = perm_features.split('\n')
+
     with open('ngram_features.txt', 'r') as file:
         ngram_features = file.read()
         ngram_features = ngram_features.split('\n')
@@ -38,28 +44,28 @@ def hybrid_ensemble_detector(bb_type='', input_file=''):
 
     intent_data_malware = labeled_intent_data(root_dir='temp_file_dir', intent_features=intent_features,
                                              single_file=True)
-    permission_data_malware = labeled_permissions_data(root_dir='temp_file_dir')
+    permission_data_malware = labeled_perm_data(root_dir='temp_file_dir', perm_features=perm_features, single_file=True)
     api_data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features, single_file=True)
     ngram_data_malware = labeled_data(root_dir='.', ngram_features=ngram_features, n_count=5, single_file=True)
 
     combined_results = []
     if bb_type == 'mlp':
-        blackbox = Classifier()
+        blackbox = Classifier2()
         blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{bb_type}_intents_model.pth'))
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(intent_data_malware))
-        blackbox = Classifier()
+        blackbox = Classifier2()
         blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{bb_type}_apis_model.pth'))
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(api_data_malware))
-        blackbox = Classifier()
+        blackbox = Classifier2()
         blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{bb_type}_permissions_model.pth'))
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(permission_data_malware))
-        blackbox = Classifier()
+        blackbox = Classifier2()
         blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{bb_type}_ngrams_5_model.pth'))
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
@@ -98,41 +104,57 @@ def hybrid_ensemble_detector(bb_type='', input_file=''):
 
 
 def ensemble_detector(model_type='', test_data=None):
-    blackboxes = [{'name': 'rf', 'path': f'rf_{model_type}_model.pth'}, {'name': 'dt', 'path': f'dt_{model_type}_model.pth'},
-     {'name': 'svm', 'path': f'svm_{model_type}_model.pth'}, {'name': 'knn', 'path': f'knn_{model_type}_model.pth'},
-     {'name': 'gnb', 'path': f'gnb_{model_type}_model.pth'}, {'name': 'lr', 'path': f'lr_{model_type}_model.pth'},
-     {'name': 'mlp', 'path': f'mlp_{model_type}_model.pth'}]
+    blackboxes = [{'name': 'rf', 'path': f'../rf_{model_type}_model.pth'}, {'name': 'dt', 'path': f'../dt_{model_type}_model.pth'},
+     {'name': 'svm', 'path': f'../svm_{model_type}_model.pth'}, {'name': 'knn', 'path': f'../knn_{model_type}_model.pth'},
+     {'name': 'gnb', 'path': f'../gnb_{model_type}_model.pth'}, {'name': 'lr', 'path': f'../lr_{model_type}_model.pth'},
+     {'name': 'mlp', 'path': f'../opcode_{model_type}_mlp.pth'}]
 
     bb_models = []
-    test_data = test_data.to(DEVICE)
 
     for bb in blackboxes:
         if bb['name'] == 'mlp':
-            blackbox = Classifier()
-            blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + bb['path']))
+            load_model = torch.load(bb['path'])
+            blackbox = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+                                   l2=len(load_model['fc1.weight']),
+                                   l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
+            blackbox.load_state_dict(load_model)
             blackbox = blackbox.to(DEVICE)
             blackbox.eval()
         else:
             blackbox = torch.load(bb['path'])
-            blackbox = blackbox.to(DEVICE)
+            blackbox = blackbox.to(DEVICE_CPU)
         bb_models.append(blackbox)
 
     combined = []
     for bb in range(len(bb_models)):
         if blackboxes[bb]['name'] == 'mlp':
+            test_data = test_data.to(DEVICE)
             results = bb_models[bb](test_data)
+            results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
         else:
+            test_data = test_data.to(DEVICE_CPU)
             results = bb_models[bb].predict_proba(test_data)
+            if blackboxes[bb]['name'] == 'knn':
+                results = results[:len(test_data)]
         # if svm
         if blackboxes[bb]['name'] == 'svm':
             results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
         combined.append(results)
     combined_results = []
     for results in combined:
-        combined_results = [list(a) for a in zip(combined_results, results)]
-
+        if not isinstance(results, list):
+            results = results.tolist()
+        results = list(results)
+        combined_results.append(results)
+    combined_results_ordered = []
+    for y in range(len(combined_results[0])):
+        row = []
+        for x in combined_results:
+            row.append(x[y])
+        combined_results_ordered.append(row)
+    # combined_results = [list(a) for a in zip(combined_results, results)]
     final = []
-    for sample in combined_results:
+    for sample in combined_results_ordered:
         mal = 0
         ben = 0
         for result in sample:
@@ -152,12 +174,15 @@ def validate_ensemble(generator, bb_name, model_name, data_malware, data_benign)
     generator.eval()
     generator.to(DEVICE)
     test_data_malware = data_malware.to(DEVICE)
-    test_data_benign = data_benign.to(DEVICE)
+    test_data_benign = data_benign.to(DEVICE_CPU)
     gen_malware = generator(test_data_malware)
+
     # gen_malware = generator(malware)
     binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
     binarized_gen_malware_logical_or = torch.logical_or(test_data_malware, binarized_gen_malware).float()
-    gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
+    gen_malware = binarized_gen_malware_logical_or.to(DEVICE_CPU)
+    test_data_malware = data_malware.to(DEVICE_CPU)
+
     results = ensemble_detector(model_type=model_name, test_data=test_data_malware)
     results_benign = ensemble_detector(model_type=model_name, test_data=test_data_benign)
 
@@ -190,8 +215,11 @@ def validate_ensemble(generator, bb_name, model_name, data_malware, data_benign)
     mal_ben_cm = {'true_pos': tp_mal, 'true_neg': tn, 'false_pos': fp, 'false_neg': fn_mal}
     precision_mal_ben = tp_mal / (tp_mal + fp)
     recall_mal_ben = tp_mal / (tp_mal + fn_mal)
-    f1_mal_ben = 2 * (1 / ((1 / precision_mal_ben) + (1 / recall_mal_ben)))
-
+    # f1_mal_ben = 2 * (1 / ((1 / precision_mal_ben) + (1 / recall_mal_ben)))
+    if precision_mal_ben + recall_mal_ben == 0:
+        f1_mal_ben = None
+    else:
+        f1_mal_ben = (2 * precision_mal_ben * recall_mal_ben) / (precision_mal_ben + recall_mal_ben)
     results = ensemble_detector(model_type=model_name, test_data=gen_malware)
 
     # results = torch.where(results > 0.5, True, False)
@@ -211,7 +239,11 @@ def validate_ensemble(generator, bb_name, model_name, data_malware, data_benign)
     gen_ben_cm = {'true_pos': tp_gen, 'true_neg': tn, 'false_pos': fp, 'false_neg': fn_gen}
     precision_gen_ben = tp_gen / (tp_gen + fp)
     recall_gen_ben = tp_gen / (tp_gen + fn_gen)
-    f1_gen_ben = 2*(1/((1/precision_gen_ben) + (1/recall_gen_ben)))
+    # f1_gen_ben = 2*(1/((1/precision_gen_ben) + (1/recall_gen_ben)))
+    if precision_gen_ben + recall_gen_ben == 0:
+        f1_gen_ben = None
+    else:
+        f1_gen_ben = (2 * precision_gen_ben * recall_gen_ben) / (precision_gen_ben + recall_gen_ben)
     perturbations = 0
     for i in range(len(gen_malware)):
         diff = gen_malware[i] - test_data_malware[i]

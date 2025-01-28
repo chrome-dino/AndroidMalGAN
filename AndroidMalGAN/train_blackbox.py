@@ -28,9 +28,9 @@ import json
 BATCH_SIZE = 150
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
-RAY_TUNE = False
-NUM_EPOCHS = 1000
-SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/opcode_ngram_'
+RAY_TUNE = True
+NUM_EPOCHS = 5000
+SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/'
 
 
 class Classifier(nn.Module):
@@ -57,12 +57,38 @@ class Classifier(nn.Module):
         return x
 
 
+class Classifier2(nn.Module):
+    def __init__(self, d_input_dim=350, l1=275, l2=200, l3=125, l4=50):
+        super(Classifier2, self).__init__()
+
+        self.input = nn.Linear(d_input_dim, l1)
+        self.fc1 = nn.Linear(l1, l2)
+        self.fc2 = nn.Linear(l2, l3)
+        self.fc3 = nn.Linear(l3, l4)
+        self.output = nn.Linear(l4, 1)
+        # self.batch_norm1 = torch.nn.BatchNorm1d(self.fc1.out_features)
+        # self.batch_norm3 = torch.nn.BatchNorm1d(self.fc3.out_features)
+
+    def forward(self, x):
+        x = self.input(x)
+        x = F.leaky_relu(x)
+        x = self.fc1(x)
+        x = F.leaky_relu(x)
+        x = self.fc2(x)
+        x = F.leaky_relu(x)
+        x = self.fc3(x)
+        x = F.leaky_relu(x)
+        x = self.output(x)
+        x = F.sigmoid(x)
+        return x
+
+
 def train_mlp(config, data_benign=None, data_malware=None, model=''):
     os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
-    classifier = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
-    discriminator = Classifier(l2=classifier['l1'], l3=classifier['l2'], l4=classifier['l3'])
+    classifier = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3'], 'l4': config['c_4']}
+    discriminator = Classifier2(l2=classifier['l2'], l3=classifier['l3'], l4=classifier['l4'])
     learning_rate_disc = config['lr_disc']
-    l2lambda_disc = config['l2_lambda_dis']
+    l2lambda_disc = config['l2_lambda_disc']
     lossfun = nn.BCELoss()
 
     disc_optimizer = torch.optim.Adam(discriminator.parameters(), lr=learning_rate_disc, weight_decay=l2lambda_disc,
@@ -77,7 +103,9 @@ def train_mlp(config, data_benign=None, data_malware=None, model=''):
         malware = malware.to(DEVICE)
         benign = benign.to(DEVICE)
         bb_benign_labels = torch.ones(list(benign.size())[0], 1)
+        bb_benign_labels = bb_benign_labels.to(DEVICE)
         bb_mal_labels = torch.zeros(list(malware.size())[0], 1)
+        bb_mal_labels = bb_mal_labels.to(DEVICE)
         pred_benign = discriminator(benign)  # REAL images into discriminator
         disc_loss_benign = lossfun(pred_benign, bb_benign_labels)
         pred_malware = discriminator(malware)  # FAKE images into discriminator
@@ -86,8 +114,8 @@ def train_mlp(config, data_benign=None, data_malware=None, model=''):
         disc_optimizer.zero_grad()
         disc_loss.backward()
         disc_optimizer.step()
-        if RAY_TUNE:
-            ray.train.report(dict(d_loss=disc_loss.item()))
+        # if RAY_TUNE:
+        #     ray.train.report(dict(d_loss=disc_loss.item()))
     torch.save(discriminator.state_dict(), SAVED_MODEL_PATH + model + '_mlp.pth')
     return
 
@@ -130,13 +158,13 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
         dataset, labels, train_size=partition[0], random_state=42)
 
     le = LabelEncoder()
-    yTrain = le.fit_transform(yTrain)
-    yTest = le.fit_transform(yTest)
+    yTrain = le.fit_transform(yTrain.ravel())
+    yTest = le.fit_transform(yTest.ravel())
 
     DT = DecisionTreeClassifier()
     yPredict = DT.fit(xTrain, yTrain).predict(xTest)
     torch_dt = convert(DT, 'pytorch')
-    torch.save(torch_dt, f'dt_{model_type}_model.pth')
+    torch.save(torch_dt, f'../dt_{model_type}_model.pth')
     print('DT Classification Report')
     print(classification_report(yTest, yPredict))
     print('DT Accuracy')
@@ -146,7 +174,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     yPredict = KNN.fit(xTrain, yTrain).predict(xTest)
     extra_config = {hummingbird.ml.operator_converters.constants.BATCH_SIZE: list(data_tensor_benign.size())[0]}
     torch_knn = convert(KNN, 'pytorch', extra_config=extra_config)
-    torch.save(torch_knn, f'knn_{model_type}_model.pth')
+    torch.save(torch_knn, f'../knn_{model_type}_model.pth')
     # pickle.dump(KNN, open('knn_model.sav', 'wb'))
     print('KNN Classification Report')
     print(classification_report(yTest, yPredict))
@@ -156,7 +184,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     RF = RandomForestClassifier()
     yPredict = RF.fit(xTrain, yTrain).predict(xTest)
     torch_rf = convert(RF, 'pytorch')
-    torch.save(torch_rf, f'rf_{model_type}_model.pth')
+    torch.save(torch_rf, f'../rf_{model_type}_model.pth')
     print('RF Classification Report')
     print(classification_report(yTest, yPredict))
     print('RF Accuracy')
@@ -166,7 +194,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     # SVM = svm.SVC(kernel='nonlinear')
     yPredict = SVM.fit(xTrain, yTrain).predict(xTest)
     torch_svm = convert(SVM, 'pytorch')
-    torch.save(torch_svm, f'svm_{model_type}_model.pth')
+    torch.save(torch_svm, f'../svm_{model_type}_model.pth')
     print('SVM Classification Report')
     print(classification_report(yTest, yPredict))
     print('SVM Accuracy')
@@ -175,7 +203,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     GNB = GaussianNB()
     yPredict = GNB.fit(xTrain, yTrain).predict(xTest)
     torch_gnb = convert(GNB, 'pytorch')
-    torch.save(torch_gnb, f'gnb_{model_type}_model.pth')
+    torch.save(torch_gnb, f'../gnb_{model_type}_model.pth')
     print('GNB Classification Report')
     print(classification_report(yTest, yPredict))
     print('GNB Accuracy')
@@ -184,64 +212,64 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     LR = LogisticRegression()
     yPredict = LR.fit(xTrain, yTrain).predict(xTest)
     torch_lr = convert(LR, 'pytorch')
-    torch.save(torch_lr, f'lr_{model_type}_model.pth')
+    torch.save(torch_lr, f'../lr_{model_type}_model.pth')
     print('LR Classification Report')
     print(classification_report(yTest, yPredict))
     print('LR Accuracy')
     print(str(accuracy_score(yTest, yPredict) * 100))
 
-    if RAY_TUNE:
-        tune_config = {
-            "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
-            "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
-            "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
-            "lr_disc": tune.uniform(0.001, 0.1),
-            "l2_lambda_disc": tune.uniform(0.001, 0.1),
-            "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
-        }
+    # if RAY_TUNE:
+    #     tune_config = {
+    #         "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
+    #         "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
+    #         "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
+    #         "lr_disc": tune.uniform(0.001, 0.1),
+    #         "l2_lambda_disc": tune.uniform(0.001, 0.1),
+    #         "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
+    #     }
+    #
+    #     scheduler = ASHAScheduler(
+    #         metric="d_loss",
+    #         mode="min",
+    #         max_t=NUM_EPOCHS,
+    #         grace_period=60,
+    #         reduction_factor=2,
+    #     )
+    #     result = tune.run(
+    #         partial(train_mlp, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type),
+    #         config=tune_config,
+    #         num_samples=2500,
+    #         scheduler=scheduler,
+    #         resources_per_trial={"cpu": 4, "gpu": 1},
+    #     )
+    #     best_trial = result.get_best_trial("g_loss", "min", "last")
+    #     best_config_gen = result.get_best_config(metric="g_loss", mode="min")
+    #     best_config_disc = result.get_best_config(metric="d_loss", mode="min")
+    #     print(f"Best trial config: {best_trial.config}")
+    #     print(f"Best trial final loss: {best_trial.last_result['g_loss']}")
+    #     print(f"Best trial final accuracy: {best_trial.last_result['accuracy']}")
+    #
+    #     print("Best config gen:", best_config_gen)
+    #     print("Best config disc:", best_config_disc)
+    #
+    #     mlp_config = {
+    #         "c_1": best_config_disc['c_1'],
+    #         "c_2": best_config_disc['c_2'],
+    #         "c_3": best_config_disc['c_3'],
+    #         "lr_disc": best_config_disc['lr_disc'],
+    #         "l2_lambda_disc": best_config_disc['l2_lambda_disc'],
+    #         "batch_size": best_config_gen['batch_size'],
+    #     }
+    #
+    #     with open(f'config_{model_type}_mlp.json', 'w') as f:
+    #         json.dump(mlp_config, f)
+    #
+    # else:
+    with open(f'../config_{model_type}_mlp.json', 'r') as f:
+        mlp_config = json.load(f)
+        train_mlp(mlp_config, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type)
 
-        scheduler = ASHAScheduler(
-            metric="d_loss",
-            mode="min",
-            max_t=NUM_EPOCHS,
-            grace_period=60,
-            reduction_factor=2,
-        )
-        result = tune.run(
-            partial(train_mlp, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type),
-            config=tune_config,
-            num_samples=10000,
-            scheduler=scheduler,
-            resources_per_trial={"cpu": 4, "gpu": 1},
-        )
-        best_trial = result.get_best_trial("g_loss", "min", "last")
-        best_config_gen = result.get_best_config(metric="g_loss", mode="min")
-        best_config_disc = result.get_best_config(metric="d_loss", mode="min")
-        print(f"Best trial config: {best_trial.config}")
-        print(f"Best trial final loss: {best_trial.last_result['g_loss']}")
-        print(f"Best trial final accuracy: {best_trial.last_result['accuracy']}")
-
-        print("Best config gen:", best_config_gen)
-        print("Best config disc:", best_config_disc)
-
-        mlp_config = {
-            "c_1": best_config_disc['c_1'],
-            "c_2": best_config_disc['c_2'],
-            "c_3": best_config_disc['c_3'],
-            "lr_disc": best_config_disc['lr_disc'],
-            "l2_lambda_disc": best_config_disc['l2_lambda_disc'],
-            "batch_size": best_config_gen['batch_size'],
-        }
-
-        with open(f'config_{model_type}_mlp.json', 'w') as f:
-            json.dump(mlp_config, f)
-
-    else:
-        with open(f'config_{model_type}_mlp.json', 'r') as f:
-            mlp_config = json.load(f)
-            train_mlp(mlp_config, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type)
-
-    torch_dt = torch.load(f'dt_{model_type}_model.pth')
+    torch_dt = torch.load(f'../dt_{model_type}_model.pth')
     # torch_rf.eval()
     torch_dt = torch_dt.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE)
@@ -271,12 +299,13 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
 
-    torch_knn = torch.load(f'knn_{model_type}_model.pth')
+    torch_knn = torch.load(f'../knn_{model_type}_model.pth')
     # torch_rf.eval()
     # torch_knn = torch_knn.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE_CPU)
     data_tensor_benign = data_tensor_benign.to(DEVICE_CPU)
     results = torch_knn.predict_proba(data_tensor_malware)
+    results = results[:len(data_tensor_malware)]
     mal = 0
     ben = 0
     for result in results:
@@ -289,7 +318,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Accuracy:' + str((mal/(mal+ben))*100) + '%')
 
     results = torch_knn.predict_proba(data_tensor_benign)
-
+    results = results[:len(data_tensor_benign)]
     mal = 0
     ben = 0
     for result in results:
@@ -301,12 +330,14 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
 
-    torch_rf = torch.load(f'rf_{model_type}_model.pth')
+    torch_rf = torch.load(f'../rf_{model_type}_model.pth')
 
     torch_rf = torch_rf.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE)
     data_tensor_benign = data_tensor_benign.to(DEVICE)
     results = torch_rf.predict_proba(data_tensor_malware)
+    results = results[:len(data_tensor_malware)]
+
     mal = 0
     ben = 0
     for result in results:
@@ -331,13 +362,14 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
 
-    torch_svm = torch.load(f'svm_{model_type}_model.pth')
+    torch_svm = torch.load(f'../svm_{model_type}_model.pth')
     torch_svm = torch_svm.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE)
     data_tensor_benign = data_tensor_benign.to(DEVICE)
     results = torch_svm.predict_proba(data_tensor_malware)
     mal = 0
     ben = 0
+    results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
     for result in results:
         if result[0] < 0.5:
             ben += 1
@@ -351,6 +383,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
 
     mal = 0
     ben = 0
+    results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
     for result in results:
         if result[0] < 0.5:
             ben += 1
@@ -360,7 +393,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
 
-    torch_gnb = torch.load(f'gnb_{model_type}_model.pth')
+    torch_gnb = torch.load(f'../gnb_{model_type}_model.pth')
     torch_gnb = torch_gnb.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE)
     data_tensor_benign = data_tensor_benign.to(DEVICE)
@@ -389,7 +422,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
 
-    torch_lr = torch.load(f'lr _{model_type}_model.pth')
+    torch_lr = torch.load(f'../lr_{model_type}_model.pth')
     torch_lr = torch_lr.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE)
     data_tensor_benign = data_tensor_benign.to(DEVICE)
@@ -418,8 +451,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
 
-    torch_mlp = Classifier()
-    torch_mlp.load_state_dict(torch.load(SAVED_MODEL_PATH))
+    load_model = torch.load(SAVED_MODEL_PATH + model_type + '_mlp.pth')
+    torch_mlp = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']), l2=len(load_model['fc1.weight']),
+                     l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
+    torch_mlp.load_state_dict(load_model)
     torch_mlp = torch_mlp.to(DEVICE)
     torch_mlp.eval()
     data_tensor_malware = data_tensor_malware.to(DEVICE)
@@ -429,7 +464,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     mal = 0
     ben = 0
     for result in results:
-        if result[0] < 0.5:
+        if result[0] > 0.5:
             ben += 1
         else:
             mal += 1
@@ -442,7 +477,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     mal = 0
     ben = 0
     for result in results:
-        if result[0] < 0.5:
+        if result[0] > 0.5:
             ben += 1
         else:
             mal += 1
