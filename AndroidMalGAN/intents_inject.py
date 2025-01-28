@@ -2,7 +2,7 @@ import os
 import subprocess
 import xml.etree.ElementTree as ET
 from other_apk_feature_extract import labeled_intent_data
-from permissions_model import PermissionsGenerator
+from intents_model import IntentsGenerator
 import torch
 
 SAVED_MODEL_PATH = './intents_malgan.pth'
@@ -11,9 +11,9 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def inject(input_file, copy_file=False):
     os.system('rm -rf temp_file_dir')
-    permissions_generator = PermissionsGenerator()
-    permissions_generator.load_state_dict(torch.load(SAVED_MODEL_PATH))
-    permissions_generator.eval()
+    intents_generator = IntentsGenerator()
+    intents_generator.load_state_dict(torch.load(SAVED_MODEL_PATH))
+    intents_generator.eval()
 
     filename = os.path.basename(input_file).split('.')[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir/{filename}')
@@ -32,7 +32,7 @@ def inject(input_file, copy_file=False):
 
     data_tensor_malware = torch.tensor(data_malware).float()
 
-    gen_malware = permissions_generator(data_tensor_malware)
+    gen_malware = intents_generator(data_tensor_malware)
     gen_malware = gen_malware[0]
 
     final = {}
@@ -56,14 +56,13 @@ def inject(input_file, copy_file=False):
         # Add a new element
         activity = root.findall('application')[0].find('activity')
         intent_filter = ET.Element('intent-filter')
-        if 'action' in intent:
-            new_element = ET.Element('action')
-        elif 'category' in intent:
-            new_element = ET.Element('category')
-        else:
-            continue
-        new_element.set('android:name', intent)
-        intent_filter.append(new_element)
+
+        new_element_act = ET.Element('action')
+        new_element_cat = ET.Element('category')
+
+        new_element_act.set('android:name', intent)
+        new_element_cat.set('android:name', 'android.intent.category.DEFAULT')
+        intent_filter.append(new_element_act)
         activity.append(intent_filter)
         # Write the modified XML back to the file
         tree.write('AndroidManifest.xml', encoding='utf-8', xml_declaration=True)

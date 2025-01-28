@@ -1,7 +1,7 @@
 import os
 import subprocess
 import xml.etree.ElementTree as ET
-from other_apk_feature_extract import labeled_permissions_data
+from other_apk_feature_extract import labeled_perm_data
 from permissions_model import PermissionsGenerator
 import torch
 
@@ -21,7 +21,11 @@ def inject(input_file, copy_file=False):
     command = command.split()
     subprocess.run(command)
 
-    data_malware = labeled_permissions_data(root_dir='temp_file_dir')
+    with open('perm_features.txt', 'r') as file:
+        perm_features = file.read()
+        perm_features = perm_features.split('\n')
+
+    data_malware = labeled_perm_data(root_dir='temp_file_dir', perm_features=perm_features, single_file=True)
     labels_malware = list(data_malware[0].keys())
     del labels_malware[-1]
     data_malware = [data_malware[0][k] for k in labels_malware]

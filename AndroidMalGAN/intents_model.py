@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve
-from train_blackbox import train_blackbox, Classifier
+from train_blackbox import train_blackbox, Classifier2
 from ensemble_blackbox import validate_ensemble
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
 
@@ -19,33 +19,38 @@ import ray
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib_inline
+import logging
+from datetime import datetime
 
 import sys
 import os
+
+LOGGER = logging.getLogger(__name__)
+logging.basicConfig(filename=datetime.now().strftime('intents_%H_%M_%d_%m_%Y.log'), encoding='utf-8', level=logging.INFO)
 
 matplotlib_inline.backend_inline.set_matplotlib_formats('svg')
 
 configs = configparser.ConfigParser()
 configs.read("settings.ini")
 
-BB_MODELS = [{'name': 'rf', 'path': 'rf_intents_model.pth'}, {'name': 'dt', 'path': 'dt_intents_model.pth'},
-             {'name': 'svm', 'path': 'svm_intents_model.pth'}, {'name': 'knn', 'path': 'knn_intents_model.pth'},
-             {'name': 'gnb', 'path': 'gnb_intents_model.pth'}, {'name': 'lr', 'path': 'lr_intents_model.pth'},
-             {'name': 'mlp', 'path': 'mlp_intents_model.pth'}]
+BB_MODELS = [{'name': 'rf', 'path': '../rf_intents_model.pth'}, {'name': 'dt', 'path': '../dt_intents_model.pth'},
+             {'name': 'svm', 'path': '../svm_intents_model.pth'}, {'name': 'knn', 'path': '../knn_intents_model.pth'},
+             {'name': 'gnb', 'path': '../gnb_intents_model.pth'}, {'name': 'lr', 'path': '../lr_intents_model.pth'},
+             {'name': 'mlp', 'path': '../intents_mlp.pth'}]
 
 # FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
 # LEARNING_RATE = 0.0002
 LEARNING_RATE = 0.001
 EARLY_STOPPAGE_THRESHOLD = 100
 BB_LEARNING_RATE = 0.001
-NUM_EPOCHS = 1000
+NUM_EPOCHS = 10000
 L2_LAMBDA = 0.01
 BB_L2_LAMBDA = 0.01
 BATCH_SIZE = 150
 NOISE = 0
 TRAIN_BLACKBOX = False
 RAY_TUNE = False
-SPLIT_DATA = False
+SPLIT_DATA = True
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/intents_'
@@ -60,7 +65,7 @@ os.environ['TUNE_DISABLE_STRICT_METRIC_CHECKING'] = '1'
 
 def train_intents_model(config, blackbox=None, bb_name=''):
     # num_epochs = 10000, batch_size = 150, learning_rate = 0.001, l2_lambda = 0.01, g_noise = 0, g_input = 0, g_1 = 0, g_2 = 0, g_3 = 0, c_input = 0, c_1 = 0, c_2 = 0, c_3 = 0
-    os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
+    # os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
     classifier_params = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
     generator_params = {'l1': config['g_1'], 'l2': config['g_2'], 'l3': config['g_3'], 'noise': config['g_noise']}
     discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_intents_model(config['lr_gen'],
@@ -97,9 +102,9 @@ def train_intents_model(config, blackbox=None, bb_name=''):
     # partition = [.8, .2]
     # use scikitlearn to split the data
     if SPLIT_DATA:
-        data_tensor_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
+        data_tensor_benign, test_data_benign, labels_benign, test_labels_benign = train_test_split(
             data_tensor_benign, labels_benign, test_size=0.4, random_state=42)
-        data_tensor_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
+        data_tensor_malware, test_data_malware, labels_malware, test_labels_malware = train_test_split(
             data_tensor_malware, labels_malware, test_size=0.4, random_state=42)
     train_data_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
         data_tensor_benign, labels_benign, test_size=partition[1], random_state=42)
@@ -121,11 +126,17 @@ def train_intents_model(config, blackbox=None, bb_name=''):
     # last_loss = float('inf')
     # early_stoppage_counter = 0
 
-    losses = torch.zeros((NUM_EPOCHS, 2))
-    disDecs = np.zeros((NUM_EPOCHS, 2))  # disDecs = discriminator decisions
-    disDecs_dev = np.zeros((NUM_EPOCHS, 2))
-    acc_test_dev = np.zeros((NUM_EPOCHS, 2))
-    print('Training MalGAN Model: ' + bb_name)
+    losses_gen = torch.zeros((NUM_EPOCHS, 1))
+    losses_disc = torch.zeros((NUM_EPOCHS, 1))
+    disDecs_ben = np.zeros((NUM_EPOCHS, 1))  # disDecs = discriminator decisions
+    disDecs_mal = np.zeros((NUM_EPOCHS, 1))
+    # disDecs_dev = np.zeros((NUM_EPOCHS, 1))
+    disDecs_dev_ben = np.zeros((NUM_EPOCHS, 1))
+    disDecs_dev_mal = np.zeros((NUM_EPOCHS, 1))
+    acc_test_train = np.zeros((NUM_EPOCHS, 1))
+    acc_test_dev = np.zeros((NUM_EPOCHS, 1))
+    LOGGER.info('Training Intent Model: ' + bb_name)
+    print('Training Intent Model: ' + bb_name)
     for e in range(NUM_EPOCHS):
 
         mal_idx = np.random.randint(0, train_data_malware.shape[0], config['batch_size'])
@@ -145,7 +156,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         ### ---------------- Train the discriminator ---------------- ###
         discriminator.train()
         # forward pass and loss for benign
-        if bb_name == 'rf':
+        if bb_name == 'rf' or bb_name == 'knn':
             benign = benign.to(DEVICE_CPU)
             gen_malware = gen_malware.to(DEVICE_CPU)
             blackbox = blackbox.to(DEVICE_CPU)
@@ -157,8 +168,11 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         # bb_benign_labels = blackbox(benign).to(DEVICE)
         if bb_name == 'mlp':
             results = blackbox(benign)
+            results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
         else:
             results = blackbox.predict_proba(benign)
+            if bb_name == 'knn':
+                results = results[:config['batch_size']]
         # if svm
         if bb_name == 'svm':
             results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -168,8 +182,11 @@ def train_intents_model(config, blackbox=None, bb_name=''):
 
         if bb_name == 'mlp':
             results = blackbox(gen_malware)
+            results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
         else:
             results = blackbox.predict_proba(gen_malware)
+            if bb_name == 'knn':
+                results = results[:config['batch_size']]
         # if svm
         if bb_name == 'svm':
             results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -190,8 +207,8 @@ def train_intents_model(config, blackbox=None, bb_name=''):
 
         disc_loss = (disc_loss_benign + disc_loss_malware)
 
-        losses[e, 0] = disc_loss.item()
-        disDecs[e, 0] = torch.mean((pred_benign < .5).float()).detach()
+        losses_disc[e, 0] = disc_loss.item()
+        disDecs_ben[e, 0] = torch.mean((pred_benign < .5).float()).detach()
 
         # backprop
         disc_optimizer.zero_grad()
@@ -217,10 +234,10 @@ def train_intents_model(config, blackbox=None, bb_name=''):
 
         # compute and collect loss and accuracy
         gen_loss = lossfun(pred_malware, benign_labels)
-        losses[e, 1] = gen_loss.item()
+        losses_gen[e, 0] = gen_loss.item()
 
         acc = torch.mean((pred_malware > .5).float()).detach()
-        disDecs[e, 1] = acc
+        disDecs_mal[e, 0] = acc
 
         # backprop
         gen_optimizer.zero_grad()
@@ -228,13 +245,53 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         gen_optimizer.step()
 
         if not RAY_TUNE:
-            if bb_name == 'rf':
+            LOGGER.info(
+                '*******************************************************************************************************')
+            print('*******************************************************************************************************')
+            if bb_name == 'rf' or bb_name == 'knn':
                 gen_malware = gen_malware.to(DEVICE_CPU)
 
             if bb_name == 'mlp':
-                results = blackbox(gen_malware)[:, -1]
+                results = blackbox(gen_malware)
+                results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
             else:
-                results = blackbox.predict_proba(gen_malware)[:, -1]
+                results = blackbox.predict_proba(gen_malware)
+                if bb_name == 'knn':
+                    results = results[:config['batch_size']]
+            if bb_name == 'svm':
+                results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+
+            mal = 0
+            ben = 0
+            for result in results:
+                if result[0] < 0.5:
+                    ben += 1
+                else:
+                    mal += 1
+            score = ben / (ben + mal)
+
+            acc_test_train[e, 0] = score
+
+            benign = dev_data_benign.to(DEVICE)
+            pred_benign = discriminator(benign)  # REAL images into discriminator
+            disDecs_dev_ben[e, 0] = torch.mean((pred_benign < .5).float()).detach()
+
+            malware = dev_data_malware.to(DEVICE)
+            gen_malware = generator(malware)
+            gen_malware = gen_malware.to(DEVICE)
+            pred_malware = discriminator(gen_malware)
+            disDecs_dev_mal[e, 0] = torch.mean((pred_malware > .5).float()).detach()
+
+            if bb_name == 'rf' or bb_name == 'knn':
+                gen_malware = gen_malware.to(DEVICE_CPU)
+
+            if bb_name == 'mlp':
+                results = blackbox(gen_malware)
+                results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
+            else:
+                results = blackbox.predict_proba(gen_malware)
+                if bb_name == 'knn':
+                    results = results[:config['batch_size']]
             if bb_name == 'svm':
                 results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
 
@@ -249,37 +306,6 @@ def train_intents_model(config, blackbox=None, bb_name=''):
 
             acc_test_dev[e, 0] = score
 
-            benign = dev_data_benign.to(DEVICE)
-            pred_benign = discriminator(benign)  # REAL images into discriminator
-            disDecs_dev[e, 0] = torch.mean((pred_benign < .5).float()).detach()
-
-            malware = dev_data_malware.to(DEVICE)
-            gen_malware = generator(malware)
-            gen_malware = gen_malware.to(DEVICE)
-            pred_malware = discriminator(gen_malware)
-            disDecs_dev[e, 1] = torch.mean((pred_malware > .5).float()).detach()
-
-            if bb_name == 'rf':
-                gen_malware = gen_malware.to(DEVICE_CPU)
-
-            if bb_name == 'mlp':
-                results = blackbox(gen_malware)[:, -1]
-            else:
-                results = blackbox.predict_proba(gen_malware)[:, -1]
-            if bb_name == 'svm':
-                results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
-
-            mal = 0
-            ben = 0
-            for result in results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            score = ben / (ben + mal)
-
-            acc_test_dev[e, 1] = score
-
         else:
             ray.train.report(dict(d_loss=disc_loss.item(), g_loss=gen_loss.item(), accuracy=float(acc)))
 
@@ -291,46 +317,112 @@ def train_intents_model(config, blackbox=None, bb_name=''):
             sys.stdout.write('\r' + msg)
 
             # start = start + BATCH_SIZE
-    sys.stdout.write('\nMalGAN training finished!\n')
+    sys.stdout.write('\nIntents training finished!\n')
     # use test data?
 
     torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
 
     if not RAY_TUNE:
-        fig, ax = plt.subplots(1, 3, figsize=(18, 5))
+        plt.figure(figsize=(10, 10))
 
-        ax[0].plot(losses)
-        ax[0].set_xlabel('Epochs')
-        ax[0].set_ylabel('Loss')
-        ax[0].set_title(f'Intents Model loss ({str(bb_name)})')
-        ax[0].legend(['Discrimator', 'Generator'])
+        plt.plot(losses_gen)
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.title(f'Intents Model gen loss ({str(bb_name)})')
+        # plt.legend(['Discrimator', 'Generator'])
+        plt.savefig(
+            os.path.join('/home/dsu/Documents/AndroidMalGAN/results_intents',
+                         f'intents_' + bb_name + '_gen_loss.png'),
+            bbox_inches='tight')
+        plt.clf()
+        plt.plot(losses_disc)
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.title(f'Intents Model disc loss ({str(bb_name)})')
+        # plt.legend(['Discrimator', 'Generator'])
+        plt.savefig(
+            os.path.join('/home/dsu/Documents/AndroidMalGAN/results_intents',
+                         f'intents_' + bb_name + '_disc_loss.png'),
+            bbox_inches='tight')
+        plt.clf()
         # ax[0].set_xlim([4000,5000])
 
-        ax[1].plot(losses[::5, 0], losses[::5, 1], 'k.', alpha=.1)
-        ax[1].set_xlabel('Discriminator loss')
-        ax[1].set_ylabel('Generator loss')
-        ax[1].set_title(f'Intents Model Loss Mapping ({str(bb_name)})')
+        plt.figure(figsize=(10, 10))
+        plt.plot(losses_disc[::5, 0], losses_gen[::5, 0], 'k.', alpha=.1)
+        plt.xlabel('Discriminator loss')
+        plt.ylabel('Generator loss')
+        plt.title(f'Intents Model Loss Mapping ({str(bb_name)})')
+        plt.savefig(
+            os.path.join('/home/dsu/Documents/AndroidMalGAN/results_intents',
+                         f'intents_' + bb_name + '_loss_map.png'),
+            bbox_inches='tight')
+        plt.clf()
 
-        ax[2].plot(disDecs)
-        ax[2].set_xlabel('Epochs')
-        ax[2].set_ylabel('Probablity Malicious')
-        ax[2].set_title(f'Intents Discriminator Output Train Set ({str(bb_name)})')
-        ax[2].legend(['Benign', 'Malware'])
+        plt.figure(figsize=(10, 10))
+        plt.plot(disDecs_ben)
+        plt.xlabel('Epochs')
+        plt.ylabel('Probablity Malicious')
+        plt.title(f'IntentsDiscriminator Output Train Set Benign ({str(bb_name)})')
+        plt.savefig(
+            os.path.join('/home/dsu/Documents/AndroidMalGAN/results_intents',
+                         f'intents_' + bb_name + '_disc_train_ben.png'),
+            bbox_inches='tight')
+        plt.clf()
 
-        ax[3].plot(disDecs)
-        ax[3].set_xlabel('Epochs')
-        ax[3].set_ylabel('Probablity Malicious')
-        ax[3].set_title(f'Intents Discriminator Output Dev Set ({str(bb_name)})')
-        ax[3].legend(['Benign', 'Malware'])
+        plt.figure(figsize=(10, 10))
+        plt.plot(disDecs_mal)
+        plt.xlabel('Epochs')
+        plt.ylabel('Probablity Malicious')
+        plt.title(f'Intent Discriminator Output Train Set Malware ({str(bb_name)})')
+        plt.savefig(
+            os.path.join('/home/dsu/Documents/AndroidMalGAN/results_intents',
+                         f'intents_' + bb_name + '_disc_train_mal.png'),
+            bbox_inches='tight')
+        plt.clf()
 
-        ax[4].plot(disDecs)
-        ax[4].set_xlabel('Epochs')
-        ax[4].set_ylabel('% Blackbox Bypass')
-        ax[4].set_title(f'Intents Model Accuracy ({str(bb_name)})')
-        ax[4].legend(['Test', 'Dev'])
+        plt.figure(figsize=(10, 10))
+        plt.plot(disDecs_dev_ben)
+        plt.xlabel('Epochs')
+        plt.ylabel('Probablity Malicious')
+        plt.title(f'Intents Discriminator Output Dev Set Benign ({str(bb_name)})')
+        plt.savefig(
+            os.path.join('/home/dsu/Documents/AndroidMalGAN/results_intents',
+                         f'intents_' + bb_name + '_disc_dev_ben.png'),
+            bbox_inches='tight')
+        plt.clf()
 
-        plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', 'intents_' + bb_name + '.png'), bbox_inches='tight')
-        plt.close(fig)
+        plt.figure(figsize=(10, 10))
+        plt.plot(disDecs_dev_mal)
+        plt.xlabel('Epochs')
+        plt.ylabel('Probablity Malicious')
+        plt.title(f'Intents Discriminator Output Dev Set Malware ({str(bb_name)})')
+        plt.savefig(
+            os.path.join('/home/dsu/Documents/AndroidMalGAN/results_intents',
+                         f'intents_' + bb_name + '_disc_dev_mal.png'),
+            bbox_inches='tight')
+        plt.clf()
+
+        plt.figure(figsize=(10, 10))
+        plt.plot(acc_test_train)
+        plt.xlabel('Epochs')
+        plt.ylabel('% Blackbox Bypass')
+        plt.title(f'Intents Model Accuracy Train ({str(bb_name)})')
+        plt.savefig(
+            os.path.join('/home/dsu/Documents/AndroidMalGAN/results_intents',
+                         f'intents_' + bb_name + '_model_acc_train.png'),
+            bbox_inches='tight')
+        plt.clf()
+
+        plt.figure(figsize=(10, 10))
+        plt.plot(acc_test_dev)
+        plt.xlabel('Epochs')
+        plt.ylabel('% Blackbox Bypass')
+        plt.title(f'Intents Model Accuracy Dev ({str(bb_name)})')
+        plt.savefig(
+            os.path.join('/home/dsu/Documents/AndroidMalGAN/results_intents',
+                         f'intents_' + bb_name + '_model_acc_dev.png'),
+            bbox_inches='tight')
+        plt.clf()
     # plt.show()
 
 
@@ -353,6 +445,10 @@ def train_intents_model(config, blackbox=None, bb_name=''):
     # print('############################################################')
     print('Testing final model')
     if not RAY_TUNE:
+        LOGGER.info(
+            '*******************************************************************************************************')
+        print('*******************************************************************************************************')
+        LOGGER.info('Testing final model')
         print('Testing final model')
         validate(generator, blackbox, bb_name, test_data_malware, test_data_benign)
         validate_ensemble(generator, bb_name, 'intents', test_data_malware, test_data_benign)
@@ -368,7 +464,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
     #     else:
     #         mal += 1
     # print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
-    print('##############################################################################')
+    # print('##############################################################################')
 
     return
 
@@ -573,20 +669,28 @@ class IntentsGenerator(nn.Module):
 def validate(generator, blackbox, bb_name, data_malware, data_benign):
     generator.eval()
     generator.to(DEVICE)
-    blackbox.to(DEVICE)
+    blackbox.to(DEVICE_CPU)
     test_data_malware = data_malware.to(DEVICE)
-    test_data_benign = data_benign.to(DEVICE)
+    test_data_benign = data_benign.to(DEVICE_CPU)
     gen_malware = generator(test_data_malware)
+    gen_malware = gen_malware.to(DEVICE_CPU)
+    test_data_malware = test_data_malware.to(DEVICE_CPU)
     # gen_malware = generator(malware)
     binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
     binarized_gen_malware_logical_or = torch.logical_or(test_data_malware, binarized_gen_malware).float()
-    gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
+    gen_malware = binarized_gen_malware_logical_or.to(DEVICE_CPU)
     if bb_name == 'mlp':
         results = blackbox(test_data_malware)
+        results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
         results_benign = blackbox(test_data_benign)
+        results_benign = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results_benign]
     else:
         results = blackbox.predict_proba(test_data_malware)
+        if bb_name == 'knn':
+            results = results[:len(test_data_malware)]
         results_benign = blackbox.predict_proba(test_data_benign)
+        if bb_name == 'knn':
+            results_benign = results_benign[:len(test_data_benign)]
     # if svm
     if bb_name == 'svm':
         results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -622,13 +726,21 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
     mal_ben_cm = {'true_pos': tp_mal, 'true_neg': tn, 'false_pos': fp, 'false_neg': fn_mal}
     precision_mal_ben = tp_mal / (tp_mal + fp)
     recall_mal_ben = tp_mal / (tp_mal + fn_mal)
-    f1_mal_ben = 2 * (1 / ((1 / precision_mal_ben) + (1 / recall_mal_ben)))
+    # f1_mal_ben = 2 * (1 / ((1 / precision_mal_ben) + (1 / recall_mal_ben)))
+    if precision_mal_ben + recall_mal_ben == 0:
+        f1_mal_ben = None
+    else:
+        f1_mal_ben = (2 * precision_mal_ben * recall_mal_ben) / (precision_mal_ben + recall_mal_ben)
+
     # print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files')
 
     if bb_name == 'mlp':
         results = blackbox(gen_malware)
+        results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
     else:
         results = blackbox.predict_proba(gen_malware)
+        if bb_name == 'knn':
+            results = results[:len(gen_malware)]
     # if svm
     if bb_name == 'svm':
         results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
@@ -648,7 +760,12 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
     gen_ben_cm = {'true_pos': tp_gen, 'true_neg': tn, 'false_pos': fp, 'false_neg': fn_gen}
     precision_gen_ben = tp_gen / (tp_gen + fp)
     recall_gen_ben = tp_gen / (tp_gen + fn_gen)
-    f1_gen_ben = 2 * (1 / ((1 / precision_gen_ben) + (1 / recall_gen_ben)))
+    # f1_gen_ben = 2 * (1 / ((1 / precision_gen_ben) + (1 / recall_gen_ben)))
+    if precision_gen_ben + recall_gen_ben == 0:
+        f1_gen_ben = None
+    else:
+        f1_gen_ben = (2 * precision_gen_ben * recall_gen_ben) / (precision_gen_ben + recall_gen_ben)
+
     perturbations = 0
     for i in range(len(gen_malware)):
         diff = gen_malware[i] - test_data_malware[i]
@@ -671,30 +788,37 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
                'gen malware set f1': f1_gen_ben,
                'gen malware perturbations avg': perturbations
                }
-    if os.path.isfile(f'results.csv'):
+    if os.path.isfile(f'results_intents.csv'):
         df = pd.DataFrame([results])
-        df.to_csv(f'results.csv', mode='a', header=False)
+        df.to_csv(f'results_intents.csv', mode='a', header=False)
     else:
         df = pd.DataFrame([results])
-        df.to_csv(f'results.csv')
+        df.to_csv(f'results_intents.csv')
 
     for bb_model in BB_MODELS:
         if bb_model['name'] == bb_name:
             continue
         if bb_model['name'] != 'mlp':
             bb = torch.load(bb_model['path'])
-            bb = bb.to(DEVICE)
+            bb = bb.to(DEVICE_CPU)
         else:
             # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
-            bb = Classifier()
-            bb.load_state_dict(torch.load(SAVED_MODEL_PATH + '_mlp.pth'))
-            bb = bb.to(DEVICE)
+            load_model = torch.load(bb_model['path'])
+            bb = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+                             l2=len(load_model['fc1.weight']),
+                             l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
+            bb.load_state_dict(load_model)
+            bb = bb.to(DEVICE_CPU)
             bb.eval()
 
         if bb_model['name'] == 'mlp':
             results = bb(gen_malware)
+            results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
         else:
             results = bb.predict_proba(gen_malware)
+            if bb_model['name'] == 'knn':
+                results = results[:len(gen_malware)]
+
         if bb_model['name'] == 'svm':
             results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
         # results = torch.where(results > 0.5, True, False)
@@ -723,9 +847,12 @@ def train():
             blackbox = torch.load(bb_model['path'])
             blackbox = blackbox.to(DEVICE)
         else:
-            blackbox = Classifier()
+            load_model = torch.load(bb_model['path'])
+            blackbox = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+                                   l2=len(load_model['fc1.weight']),
+                                   l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
 
-            blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + '_mlp.pth'))
+            blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + 'mlp.pth'))
             blackbox = blackbox.to(DEVICE)
             blackbox.eval()
         if RAY_TUNE:
@@ -733,7 +860,7 @@ def train():
                 metric="g_loss",
                 mode="min",
                 max_t=NUM_EPOCHS,
-                grace_period=60,
+                grace_period=10,
                 reduction_factor=2,
             )
             tune_config = {
@@ -741,9 +868,9 @@ def train():
                 "g_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
                 "g_2": tune.choice([1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000]),
                 "g_3": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
-                "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
-                "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
-                "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
+                "c_1": tune.choice([450, 400, 350, 325, 300, 275, 250, 225, 200, 175, 150]),
+                "c_2": tune.choice([325, 300, 275, 250, 225, 200, 175, 150, 125]),
+                "c_3": tune.choice([225, 200, 150, 125, 100, 75, 50, 40, 30, 20, 10]),
                 "lr_gen": tune.uniform(0.001, 0.1),
                 "lr_disc": tune.uniform(0.001, 0.1),
                 "l2_lambda_gen": tune.uniform(0.001, 0.1),
@@ -754,9 +881,11 @@ def train():
             result = tune.run(
                 partial(train_intents_model, blackbox=blackbox, bb_name=bb_model['name']),
                 config=tune_config,
-                num_samples=10000,
+                num_samples=500,
                 scheduler=scheduler,
                 resources_per_trial={"cpu": 4, "gpu": 1},
+                verbose=0,
+                log_to_file=False
             )
 
             best_trial = result.get_best_trial("g_loss", "min", "last")
@@ -769,9 +898,30 @@ def train():
 
             print("Best config gen:", best_config_gen)
             print("Best config disc:", best_config_disc)
+            LOGGER.info(f"Best trial config: {best_trial.config}")
+            LOGGER.info(f"Best trial final loss: {best_trial.last_result['g_loss']}")
+            LOGGER.info(f"Best trial final accuracy: {best_trial.last_result['accuracy']}")
+            LOGGER.info("Best config gen:", best_config_gen)
+            LOGGER.info("Best config disc:", best_config_disc)
+            config = {
+                "g_noise": best_config_gen['g_noise'],
+                "g_1": best_config_gen['g_1'],
+                "g_2": best_config_gen['g_2'],
+                "g_3": best_config_gen['g_3'],
+                "c_1": best_config_disc['c_1'],
+                "c_2": best_config_disc['c_2'],
+                "c_3": best_config_disc['c_3'],
+                "lr_gen": best_config_gen['lr_gen'],
+                "lr_disc": best_config_disc['lr_disc'],
+                "l2_lambda_gen": best_config_gen['l2_lambda_gen'],
+                "l2_lambda_disc": best_config_disc['l2_lambda_disc'],
+                "batch_size": best_config_gen['batch_size'],
+            }
+            with open(f'../config_intents_{bb_model["name"]}_malgan.json', 'w') as f:
+                json.dump(config, f)
         else:
-            with open('config_intents.json', 'r') as f:
+            with open(f'../config_intents_{bb_model["name"]}_malgan.json', 'r') as f:
                 config = json.load(f)
                 train_intents_model(config, blackbox=blackbox, bb_name=bb_model['name'])
     print('Finished!')
-
+train()

@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import re
-from other_apk_feature_extract import labeled_permissions_data, labeled_api_data, labeled_intent_data
+from other_apk_feature_extract import labeled_perm_data, labeled_api_data, labeled_intent_data
 from opcode_ngram_feature_extract import labeled_data as labeled_ngram_data
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import OrdinalEncoder
@@ -111,6 +111,10 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
         api_features = file.read()
         api_features = api_features.split('\n')
 
+    with open('perm_features.txt', 'r') as file:
+        perm_features = file.read()
+        perm_features = perm_features.split('\n')
+
     with open("hybrid_samples.txt") as samples:
         for s in samples:
             s = s.rstrip()
@@ -119,7 +123,7 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
             file_apis = labeled_api_data(root_dir=s, api_features=api_features, malware=api_features,
                                          single_file=True)
 
-            file_permissions = labeled_permissions_data(root_dir=s)
+            file_permissions = labeled_perm_data(root_dir=s, perm_features=perm_features, single_file=True)
             file_intents = labeled_intent_data(root_dir=s, intent_features=intent_features,
                                                single_file=True)
 
