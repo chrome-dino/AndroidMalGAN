@@ -1087,8 +1087,9 @@ def train():
                 )
                 search_space['checkpoint_interval'] = perturbation_interval
                 bayesopt = BayesOptSearch(metric="mean_accuracy", mode="max")
+                trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 4, "gpu": 1})
                 tuner = tune.Tuner(
-                    partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']),
+                    trainable_with_resource,
                     run_config=ray.train.RunConfig(
                         name="pbt_test",
                         # Stop when we've reached a threshold accuracy, or a maximum
@@ -1106,7 +1107,6 @@ def train():
                         num_samples=500,
 
                     ),
-                    resources_per_trial={"cpu": 4, "gpu": 1},
                     param_space=search_space,
                     log_to_file=False
                 )
