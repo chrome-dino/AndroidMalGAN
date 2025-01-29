@@ -81,7 +81,6 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
                                                                                                      'l2_lambda_disc'],
                                                                                                  classifier_params,
                                                                                                  generator_params)
-    batch_size = config['batch_size']
     discriminator = discriminator.to(DEVICE)
     generator = generator.to(DEVICE)
 
@@ -148,8 +147,8 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
         # start = 0
         # for step in range(data_tensor_malware.shape[0] // BATCH_SIZE):
         # for X, y in train_loader_benign:
-        mal_idx = np.random.randint(0, train_data_malware.shape[0], batch_size)
-        ben_idx = np.random.randint(0, train_data_benign.shape[0], batch_size)
+        mal_idx = np.random.randint(0, train_data_malware.shape[0], config['batch_size'])
+        ben_idx = np.random.randint(0, train_data_benign.shape[0], config['batch_size'])
         malware = train_data_malware[mal_idx]
         benign = train_data_benign[ben_idx]
 
@@ -442,27 +441,6 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
                          f'ngram_{str(n_count)}_' + bb_name + '_model_acc_dev.png'),
             bbox_inches='tight')
         plt.close('all')
-        # plt.savefig(os.path.join('/home/dsu/Documents/AndroidMalGAN/results', f'ngram_{str(n_count)}_' + bb_name + '.png'), bbox_inches='tight')
-        # plt.close(fig)
-        # plt.show()
-
-    # diff = False
-    # for p1, p2 in zip(best_model.parameters(), ngram_generator.parameters()):
-    #     if p1.data.ne(p2.data).sum() > 0:
-    #         diff = True
-    #         break
-    # if diff:
-    #     print('models are different!')
-    # else:
-    #     print('models are same!')
-    # print('/////////////////////////////////////////////////////////////')
-    # print(f'Generator model saved to: {SAVED_MODEL_PATH}')
-    # print(f'Testing with {str(NOISE)} noise inputs')
-    # print(f'Testing best performing model (epoch: {str(best_epoch)})')
-    # best_model = NgramGenerator(noise_dims=NOISE)
-    # best_model.load_state_dict(torch.load(SAVED_BEST_MODEL_PATH))
-    # validate(best_model, blackbox, test_data_malware)
-    # print('############################################################')
 
     if not RAY_TUNE:
         LOGGER.info('*******************************************************************************************************')
@@ -471,17 +449,6 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
         print('Testing final model')
         validate(generator, blackbox, bb_name, test_data_malware, test_data_benign, n_count)
         validate_ensemble(generator, bb_name, f'ngram_{str(n_count)}', test_data_malware, test_data_benign)
-    # test_data_malware = test_data_malware.to(DEVICE)
-    # results = discriminator(test_data_malware)
-    # # print(results)
-    # mal = 0
-    # ben = 0
-    # for result in results:
-    #     if result[0] > 0.5:
-    #         ben += 1
-    #     else:
-    #         mal += 1
-    # print(f'discriminator set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
 
     return
 
