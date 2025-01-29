@@ -1016,8 +1016,6 @@ def train():
                     tune_config=tune.TuneConfig(
                         scheduler=scheduler,
                         search_alg=bayesopt,
-                        metric="mean_accuracy",
-                        mode="max",
                         reuse_actors=True,
                         num_samples=500,
 
