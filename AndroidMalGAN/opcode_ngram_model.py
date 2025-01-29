@@ -1086,7 +1086,7 @@ def train():
                     hyperparam_mutations=search_space,
                 )
                 search_space['checkpoint_interval'] = perturbation_interval
-                bayesopt = BayesOptSearch(metric="mean_accuracy", mode="max")
+                # bayesopt = BayesOptSearch(metric="mean_accuracy", mode="max")
                 trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 4, "gpu": 1})
                 tuner = tune.Tuner(
                     trainable_with_resource,
@@ -1103,7 +1103,7 @@ def train():
                     ),
                     tune_config=tune.TuneConfig(
                         scheduler=scheduler,
-                        search_alg=bayesopt,
+                        # search_alg=bayesopt,
                         num_samples=500,
 
                     ),
