@@ -171,6 +171,9 @@ def ensemble_detector(model_type='', test_data=None):
 
 
 def validate_ensemble(generator, bb_name, model_name, data_malware, data_benign):
+
+    if bb_name == 'ensemble':
+        return
     generator.eval()
     generator.to(DEVICE)
     test_data_malware = data_malware.to(DEVICE)

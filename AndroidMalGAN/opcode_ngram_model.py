@@ -672,23 +672,28 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
     gen_malware = binarized_gen_malware_logical_or.to(DEVICE_CPU)
     # else:
     #     gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
-
-    if bb_name == 'mlp':
-        results = blackbox(test_data_malware)
-        results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
-        results_benign = blackbox(test_data_benign)
-        results_benign = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results_benign]
+    if bb_name == 'ensemble':
+        results = ensemble_detector(model_type=f'ngram_{n_count}', test_data=test_data_malware)
+        results = np.array([[row[1]] for row in results])
+        results_benign = ensemble_detector(model_type=f'ngram_{n_count}', test_data=test_data_benign)
+        results_benign = np.array([[row[1]] for row in results_benign])
     else:
-        results = blackbox.predict_proba(test_data_malware)
-        if bb_name == 'knn':
-            results = results[:len(test_data_malware)]
-        results_benign = blackbox.predict_proba(test_data_benign)
-        if bb_name == 'knn':
-            results_benign = results_benign[:len(test_data_benign)]
-    # if svm
-    if bb_name == 'svm':
-        results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
-        results_benign = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_benign]
+        if bb_name == 'mlp':
+            results = blackbox(test_data_malware)
+            results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
+            results_benign = blackbox(test_data_benign)
+            results_benign = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results_benign]
+        else:
+            results = blackbox.predict_proba(test_data_malware)
+            if bb_name == 'knn':
+                results = results[:len(test_data_malware)]
+            results_benign = blackbox.predict_proba(test_data_benign)
+            if bb_name == 'knn':
+                results_benign = results_benign[:len(test_data_benign)]
+        # if svm
+        if bb_name == 'svm':
+            results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+            results_benign = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_benign]
     # results = torch.where(results > 0.5, True, False)
     mal = 0
     ben = 0
@@ -725,16 +730,20 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
     else:
         f1_mal_ben = (2 * precision_mal_ben * recall_mal_ben) / (precision_mal_ben + recall_mal_ben)
 
-    if bb_name == 'mlp':
-        results = blackbox(gen_malware)
-        results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
+    if bb_name == 'ensemble':
+        results = ensemble_detector(model_type=f'ngram_{n_count}', test_data=gen_malware)
+        results = np.array([[row[1]] for row in results])
     else:
-        results = blackbox.predict_proba(gen_malware)
-        if bb_name == 'knn':
-            results = results[:len(gen_malware)]
-    # if svm
-    if bb_name == 'svm':
-        results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+        if bb_name == 'mlp':
+            results = blackbox(gen_malware)
+            results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
+        else:
+            results = blackbox.predict_proba(gen_malware)
+            if bb_name == 'knn':
+                results = results[:len(gen_malware)]
+        # if svm
+        if bb_name == 'svm':
+            results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
     # results = torch.where(results > 0.5, True, False)
     mal = 0
     ben = 0
@@ -791,11 +800,11 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
     bb_models = [{'name': 'rf', 'path': f'../rf_ngram_{str(n_count)}_model.pth'}, {'name': 'dt', 'path': f'../dt_ngram_{str(n_count)}_model.pth'},
                  {'name': 'svm', 'path': f'../svm_ngram_{str(n_count)}_model.pth'}, {'name': 'knn', 'path': f'../knn_ngram_{str(n_count)}_model.pth'},
                  {'name': 'gnb', 'path': f'../gnb_ngram_{str(n_count)}_model.pth'}, {'name': 'lr', 'path': f'../lr_ngram_{str(n_count)}_model.pth'},
-                 {'name': 'mlp', 'path': f'../opcode_ngram_{str(n_count)}_mlp.pth'}]
+                 {'name': 'mlp', 'path': f'../opcode_ngram_{str(n_count)}_mlp.pth'}, {'name': 'ensemble', 'path': ''},]
     for bb_model in bb_models:
         if bb_model['name'] == bb_name:
            continue
-        if bb_model['name'] != 'mlp':
+        if bb_model['name'] != 'mlp' and bb_model['name'] != 'ensemble':
             bb = torch.load(bb_model['path'])
             bb = bb.to(DEVICE_CPU)
         else:
@@ -810,6 +819,9 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
         if bb_model['name'] == 'mlp':
             results = bb(gen_malware)
             results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
+        elif bb_model['name'] == 'ensemble':
+            results = ensemble_detector(model_type=f'ngram_{n_count}', test_data=gen_malware)
+            results = np.array([[row[1]] for row in results])
         else:
             results = bb.predict_proba(gen_malware)
             if bb_model['name'] == 'knn':
