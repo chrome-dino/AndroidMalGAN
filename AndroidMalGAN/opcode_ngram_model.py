@@ -137,6 +137,7 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
     disDecs_ben = np.zeros((NUM_EPOCHS, 1))  # disDecs = discriminator decisions
     disDecs_mal = np.zeros((NUM_EPOCHS, 1))
     # disDecs_dev = np.zeros((NUM_EPOCHS, 1))
+    disDecs_dev_gen_mal = np.zeros((NUM_EPOCHS, 1))
     disDecs_dev_ben = np.zeros((NUM_EPOCHS, 1))
     disDecs_dev_mal = np.zeros((NUM_EPOCHS, 1))
     bb_dev_gen_mal = np.zeros((NUM_EPOCHS, 1))
@@ -287,7 +288,7 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
             disDecs_dev_ben[e, 0] = torch.mean((pred_benign < .5).float()).detach()
 
             pred_malware = discriminator(malware)
-            disDecs_dev_mal[e, 1] = torch.mean((pred_malware > .5).float()).detach()
+            disDecs_dev_mal[e, 0] = torch.mean((pred_malware > .5).float()).detach()
 
             gen_malware = generator(malware)
             gen_malware = gen_malware.to(DEVICE)
@@ -417,6 +418,17 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
         plt.savefig(
             os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
                          f'ngram_{str(n_count)}_' + bb_name + '_disc_dev_mal.png'),
+            bbox_inches='tight')
+        plt.close('all')
+
+        plt.figure(figsize=(10, 10))
+        plt.plot(disDecs_dev_gen_mal)
+        plt.xlabel('Epochs')
+        plt.ylabel('Probablity Malicious')
+        plt.title(f'Ngram {str(n_count)} Opcode Discriminator Output Dev Set Gen Malware ({str(bb_name)})')
+        plt.savefig(
+            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+                         f'ngram_{str(n_count)}_' + bb_name + '_disc_dev_gen_mal.png'),
             bbox_inches='tight')
         plt.close('all')
 
@@ -906,7 +918,7 @@ def train():
                     time_attr='training_iteration',
                     metric='mean_accuracy',
                     mode='max',
-                    max_t=100,
+                    max_t=1000,
                     grace_period=10,
                     reduction_factor=3,
                     brackets=1,
@@ -948,7 +960,7 @@ def train():
                 plt.ylabel("Mean Accuracy")
                 plt.title(f'Ngram {str(n)} Opcode Ray Tune Mean Accuracy ({str(bb_model["name"])})')
                 plt.savefig(
-                    os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+                    os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
                                  f'ngram_{str(n)}_' + bb_model['name'] + '_ray_mean_acc.png'),
                     bbox_inches='tight')
                 plt.close('all')
@@ -959,7 +971,7 @@ def train():
                 plt.ylabel("Generator Loss")
                 plt.title(f'Ngram {str(n)} Opcode Ray Tune Generator Loss ({str(bb_model["name"])})')
                 plt.savefig(
-                    os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+                    os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
                                  f'ngram_{str(n)}_' + bb_model['name'] + '_ray_gen_loss.png'),
                     bbox_inches='tight')
                 plt.close('all')
@@ -970,7 +982,7 @@ def train():
                 plt.ylabel("Discriminator Loss")
                 plt.title(f'Ngram {str(n)} Opcode Ray Tune Discriminator Loss ({str(bb_model["name"])})')
                 plt.savefig(
-                    os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+                    os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
                                  f'ngram_{str(n)}_' + bb_model['name'] + '_ray_disc_loss.png'),
                     bbox_inches='tight')
                 plt.close('all')
