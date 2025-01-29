@@ -993,10 +993,10 @@ def train():
                 }
 
                 try:
-                    with open(f'config_ngram_{str(n)}_{bb_model["name"]}_malgan.json') as f:
+                    with open(f'../config_ngram_{str(n)}_{bb_model["name"]}_malgan.json') as f:
                         best_param = json.load(f)
                 except FileNotFoundError as e:
-                    with open(f'config_ngram_{str(n)}_mlp_malgan.json') as f:
+                    with open(f'../config_ngram_{str(n)}_mlp_malgan.json') as f:
                         best_param = json.load(f)
                 current_best_params = [best_param]
 
