@@ -992,13 +992,13 @@ def train():
                     "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
                 }
 
-                try:
-                    with open(f'../config_ngram_{str(n)}_{bb_model["name"]}_malgan.json') as f:
-                        best_param = json.load(f)
-                except FileNotFoundError as e:
-                    with open(f'../config_ngram_{str(n)}_mlp_malgan.json') as f:
-                        best_param = json.load(f)
-                current_best_params = [best_param]
+                # try:
+                #     with open(f'../config_ngram_{str(n)}_{bb_model["name"]}_malgan.json') as f:
+                #         best_param = json.load(f)
+                # except FileNotFoundError as e:
+                #     with open(f'../config_ngram_{str(n)}_mlp_malgan.json') as f:
+                #         best_param = json.load(f)
+                # current_best_params = [best_param]
 
                 scheduler = ASHAScheduler(
                     time_attr='training_iteration',
@@ -1009,7 +1009,7 @@ def train():
                     reduction_factor=3,
                     brackets=1,
                 )
-                hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max", points_to_evaluate=current_best_params)
+                hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max")
                 trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 4, "gpu": 1})
                 tuner = tune.Tuner(
                     trainable_with_resource,
