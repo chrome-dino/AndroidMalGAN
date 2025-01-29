@@ -139,8 +139,7 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
     # disDecs_dev = np.zeros((NUM_EPOCHS, 1))
     disDecs_dev_ben = np.zeros((NUM_EPOCHS, 1))
     disDecs_dev_mal = np.zeros((NUM_EPOCHS, 1))
-    acc_test_train = np.zeros((NUM_EPOCHS, 1))
-    acc_test_dev = np.zeros((NUM_EPOCHS, 1))
+    bb_dev_gen_mal = np.zeros((NUM_EPOCHS, 1))
     LOGGER.info('Training MalGAN Model: ' + bb_name)
     print('Training MalGAN Model: ' + bb_name)
 
@@ -281,52 +280,19 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
         gen_loss.backward()
         gen_optimizer.step()
 
+        malware = dev_data_malware.to(DEVICE)
         if not RAY_TUNE:
-            if bb_name == 'rf' or bb_name == 'knn':
-                gen_malware = gen_malware.to(DEVICE_CPU)
-
-            if bb_name == 'mlp':
-                results = blackbox(gen_malware)
-                results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
-            else:
-                results = blackbox.predict_proba(gen_malware)
-                if bb_name == 'knn':
-                    results = results[:config['batch_size']]
-            if bb_name == 'svm':
-                results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
-
-            mal = 0
-            ben = 0
-            for result in results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            score = ben/(ben+mal)
-
-            acc_test_train[e, 0] = score
-
             benign = dev_data_benign.to(DEVICE)
             pred_benign = discriminator(benign)  # REAL images into discriminator
             disDecs_dev_ben[e, 0] = torch.mean((pred_benign < .5).float()).detach()
 
-            malware = dev_data_malware.to(DEVICE)
+            pred_malware = discriminator(malware)
+            disDecs_dev_mal[e, 1] = torch.mean((pred_malware > .5).float()).detach()
+
             gen_malware = generator(malware)
             gen_malware = gen_malware.to(DEVICE)
             pred_malware = discriminator(gen_malware)
-            disDecs_dev_mal[e, 0] = torch.mean((pred_malware > .5).float()).detach()
-
-            if bb_name == 'rf' or bb_name == 'knn':
-                gen_malware = gen_malware.to(DEVICE_CPU)
-            if bb_name == 'mlp':
-                results = blackbox(gen_malware)
-                results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
-            else:
-                results = blackbox.predict_proba(gen_malware)
-                if bb_name == 'knn':
-                    results = results[:config['batch_size']]
-            if bb_name == 'svm':
-                results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
+            disDecs_dev_gen_mal[e, 0] = torch.mean((pred_malware > .5).float()).detach()
 
         gen_malware = generator(malware)
         gen_malware = gen_malware.to(DEVICE)
@@ -357,62 +323,9 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
                 mal += 1
         score = ben / (ben + mal)
 
-        acc_test_dev[e, 0] = score
+        bb_dev_gen_mal[e, 0] = score
 
-
-        if not RAY_TUNE:
-            # if bb_name == 'rf':
-            #     gen_malware = gen_malware.to(DEVICE_CPU)
-            #
-            # if bb_name == 'mlp':
-            #     results = blackbox(gen_malware)[:, -1]
-            # else:
-            #     results = blackbox.predict_proba(gen_malware)[:, -1]
-            # if bb_name == 'svm':
-            #     results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
-            #
-            # mal = 0
-            # ben = 0
-            # for result in results:
-            #     if result[0] < 0.5:
-            #         ben += 1
-            #     else:
-            #         mal += 1
-            # score = ben/(ben+mal)
-            #
-            # acc_test_dev[e, 0] = score
-
-            # benign = dev_data_benign.to(DEVICE)
-            # pred_benign = discriminator(benign)  # REAL images into discriminator
-            # disDecs_dev[e, 0] = torch.mean((pred_benign < .5).float()).detach()
-
-            # malware = dev_data_malware.to(DEVICE)
-            # gen_malware = generator(malware)
-            # gen_malware = gen_malware.to(DEVICE)
-            # pred_malware = discriminator(gen_malware)
-            # disDecs_dev[e, 1] = torch.mean((pred_malware > .5).float()).detach()
-            #
-            # if bb_name == 'rf':
-            #     gen_malware = gen_malware.to(DEVICE_CPU)
-            # if bb_name == 'mlp':
-            #     results = blackbox(gen_malware)[:, -1]
-            # else:
-            #     results = blackbox.predict_proba(gen_malware)[:, -1]
-            # if bb_name == 'svm':
-            #     results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
-            #
-            # mal = 0
-            # ben = 0
-            # for result in results:
-            #     if result[0] < 0.5:
-            #         ben += 1
-            #     else:
-            #         mal += 1
-            # score = ben/(ben+mal)
-
-            acc_test_dev[e, 1] = score
-
-        else:
+        if RAY_TUNE:
             metrics = dict(d_loss=disc_loss.item(), g_loss=gen_loss.item(), mean_accuracy=float(score),
                            training_iteration=e)
             ray.train.report(metrics)
@@ -508,18 +421,7 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
         plt.close('all')
 
         plt.figure(figsize=(10, 10))
-        plt.plot(acc_test_train)
-        plt.xlabel('Epochs')
-        plt.ylabel('% Blackbox Bypass')
-        plt.title(f'Ngram {str(n_count)} Opcode Model Accuracy Train ({str(bb_name)})')
-        plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
-                         f'ngram_{str(n_count)}_' + bb_name + '_model_acc_train.png'),
-            bbox_inches='tight')
-        plt.close('all')
-
-        plt.figure(figsize=(10, 10))
-        plt.plot(acc_test_dev)
+        plt.plot(bb_dev_gen_mal)
         plt.xlabel('Epochs')
         plt.ylabel('% Blackbox Bypass')
         plt.title(f'Ngram {str(n_count)} Opcode Model Accuracy Dev ({str(bb_name)})')
