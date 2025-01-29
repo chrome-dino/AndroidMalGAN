@@ -17,7 +17,7 @@ from ray import train, tune
 from ray.tune.schedulers import ASHAScheduler, PopulationBasedTraining
 import ray
 from ray.train import Checkpoint
-from ray.tune.search.bayesopt import BayesOptSearch
+from ray.tune.search.bayesopt import HyperOptSearch
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -992,6 +992,14 @@ def train():
                     "batch_size": [50, 100, 150, 200, 250, 300, 350],
                 }
 
+                try:
+                    with open(f'config_ngram_{str(n)}_{bb_model["name"]}_malgan.json') as f:
+                        best_param = json.load(f)
+                except FileNotFoundError as e:
+                    with open(f'config_ngram_{str(n)}_mlp_malgan.json') as f:
+                        best_param = json.load(f)
+                current_best_params = [best_param]
+
                 scheduler = ASHAScheduler(
                     time_attr='training_iteration',
                     metric='mean_accuracy',
@@ -1001,7 +1009,7 @@ def train():
                     reduction_factor=3,
                     brackets=1,
                 )
-                bayesopt = BayesOptSearch(metric="mean_accuracy", mode="max")
+                hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max", points_to_evaluate=current_best_params)
                 trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 4, "gpu": 1})
                 tuner = tune.Tuner(
                     trainable_with_resource,
@@ -1015,7 +1023,7 @@ def train():
                     ),
                     tune_config=tune.TuneConfig(
                         scheduler=scheduler,
-                        search_alg=bayesopt,
+                        search_alg=hyperopt,
                         reuse_actors=True,
                         num_samples=500,
 
