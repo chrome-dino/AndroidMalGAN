@@ -17,7 +17,7 @@ from ray import train, tune
 from ray.tune.schedulers import ASHAScheduler, PopulationBasedTraining
 import ray
 from ray.train import Checkpoint
-from ray.tune.search.bayesopt import HyperOptSearch
+from ray.tune.search.hyperopt import HyperOptSearch
 
 import numpy as np
 import matplotlib.pyplot as plt
