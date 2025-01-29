@@ -71,77 +71,17 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
     # num_epochs = 10000, batch_size = 150, learning_rate = 0.001, l2_lambda = 0.01, g_noise = 0, g_input = 0, g_1 = 0, g_2 = 0, g_3 = 0, c_input = 0, c_1 = 0, c_2 = 0, c_3 = 0
     os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
 
-    step = 1
-
-    if not RAY_TUNE:
-        classifier_params = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
-        generator_params = {'l1': config['g_1'], 'l2': config['g_2'], 'l3': config['g_3'], 'noise': config['g_noise']}
-        discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_opcode_ngram_model(config['lr_gen'],
-                                                                                                     config[
-                                                                                                         'l2_lambda_gen'],
-                                                                                                     config['lr_disc'],
-                                                                                                     config[
-                                                                                                         'l2_lambda_disc'],
-                                                                                                     classifier_params,
-                                                                                                     generator_params)
-        batch_size = config['batch_size']
-    else:
-        classifier_params = {'l1': config.get("c_1", 700), 'l2': config.get("c_2", 350), 'l3': config.get("c_3", 200)}
-        generator_params = {'l1': config.get("g_1", 700), 'l2': config.get("g_2", 1200), 'l3': config.get("g_3", 700), 'noise': config.get("g_noise", 40)}
-        discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_opcode_ngram_model(config.get("lr_gen", 0.01),
-                                                                                                     config.get("l2_lambda_gen", 0.01),
-                                                                                                     config.get("lr_disc", 0.01),
-                                                                                                     config.get("l2_lambda_disc", 0.01),
-                                                                                                     classifier_params,
-                                                                                                     generator_params)
-        batch_size = config.get("batch_size", 150)
-
-
-
-        # If `train.get_checkpoint()` is populated, then we are resuming from a checkpoint.
-        checkpoint = ray.train.get_checkpoint()
-        if checkpoint:
-            with checkpoint.as_directory() as checkpoint_dir:
-                checkpoint_dict = torch.load(os.path.join(checkpoint_dir, "checkpoint.pt"))
-
-            # Load model state and iteration step from checkpoint.
-            discriminator.load_state_dict(checkpoint_dict["disc_model_state_dict"])
-            generator.load_state_dict(checkpoint_dict["gen_model_state_dict"])
-            for param_group in discriminator.param_groups:
-                if 'c_1' in config:
-                    param_group['l1'] = config['c_1']
-                if 'c_2' in config:
-                    param_group['l2'] = config['c_2']
-                if 'c_3' in config:
-                    param_group['l3'] = config['c_3']
-            for param_group in generator.param_groups:
-                if 'g_1' in config:
-                    param_group['l1'] = config['g_1']
-                if 'g_2' in config:
-                    param_group['l2'] = config['g_2']
-                if 'g_3' in config:
-                    param_group['l3'] = config['g_3']
-                if 'lr_disc' in config:
-                    param_group['noise_dims'] = config['g_noise']
-            # Load optimizer state (needed since we're using momentum),
-            # then set the `lr` and `momentum` according to the config.
-            disc_optimizer.load_state_dict(checkpoint_dict["disc_optimizer_state_dict"])
-            gen_optimizer.load_state_dict(checkpoint_dict["gen_optimizer_state_dict"])
-            for param_group in disc_optimizer.param_groups:
-                if 'l2_lambda_disc' in config:
-                    param_group['l2_lambda_disc'] = config['l2_lambda_disc']
-                if 'lr_disc' in config:
-                    param_group['lr_disc'] = config['lr_disc']
-            for param_group in gen_optimizer.param_groups:
-                if 'l2_lambda_gen' in config:
-                    param_group['l2_lambda_gen'] = config['l2_lambda_gen']
-                if 'lr_gen' in config:
-                    param_group['lr_gen'] = config['lr_gen']
-            batch_size = config['batch_size']
-            # Note: Make sure to increment the checkpointed step by 1 to get the current step.
-            last_step = checkpoint_dict["step"]
-            step = last_step + 1
-
+    classifier_params = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
+    generator_params = {'l1': config['g_1'], 'l2': config['g_2'], 'l3': config['g_3'], 'noise': config['g_noise']}
+    discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_opcode_ngram_model(config['lr_gen'],
+                                                                                                 config[
+                                                                                                     'l2_lambda_gen'],
+                                                                                                 config['lr_disc'],
+                                                                                                 config[
+                                                                                                     'l2_lambda_disc'],
+                                                                                                 classifier_params,
+                                                                                                 generator_params)
+    batch_size = config['batch_size']
     discriminator = discriminator.to(DEVICE)
     generator = generator.to(DEVICE)
 
@@ -203,9 +143,8 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
     acc_test_dev = np.zeros((NUM_EPOCHS, 1))
     LOGGER.info('Training MalGAN Model: ' + bb_name)
     print('Training MalGAN Model: ' + bb_name)
-    e = 0
-    while True:
-    # for e in range(NUM_EPOCHS):
+
+    for e in range(NUM_EPOCHS):
         # start = 0
         # for step in range(data_tensor_malware.shape[0] // BATCH_SIZE):
         # for X, y in train_loader_benign:
@@ -389,11 +328,6 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
             if bb_name == 'svm':
                 results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results]
 
-
-
-
-
-
         gen_malware = generator(malware)
         gen_malware = gen_malware.to(DEVICE)
         binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
@@ -479,33 +413,15 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
             acc_test_dev[e, 1] = score
 
         else:
-            metrics = dict(d_loss=disc_loss.item(), g_loss=gen_loss.item(), mean_accuracy=float(score))
-            if step % config["checkpoint_interval"] == 0:
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    torch.save(
-                        {
-                            "step": step,
-                            "gen_model_state_dict": generator.state_dict(),
-                            "gen_optimizer_state_dict": gen_optimizer.state_dict(),
-                            "disc_model_state_dict": discriminator.state_dict(),
-                            "disc_optimizer_state_dict": disc_optimizer.state_dict(),
-                        },
-                        os.path.join(tmpdir, "checkpoint.pt"),
-                    )
-                    ray.train.report(metrics, checkpoint=Checkpoint.from_directory(tmpdir))
-            else:
-                ray.train.report(metrics)
-            step += 1
+            metrics = dict(d_loss=disc_loss.item(), g_loss=gen_loss.item(), mean_accuracy=float(score),
+                           training_iteration=e)
+            ray.train.report(metrics)
             # ray.train.report(dict(d_loss=disc_loss.item(), g_loss=gen_loss.item(), accuracy=float(acc)))
 
         if e % 1000 == 0:
             msg = f'Finished epoch {e}/{NUM_EPOCHS}'
             sys.stdout.write('\r' + msg)
-        e += 1
-            # start = start + BATCH_SIZE
-        if not RAY_TUNE:
-            if e >= NUM_EPOCHS:
-                break
+
     sys.stdout.write('\nMalGAN training finished!\n')
     # use test data?
 
@@ -1061,8 +977,6 @@ def train():
                     blackbox = blackbox.to(DEVICE)
                     blackbox.eval()
             if RAY_TUNE:
-
-                perturbation_interval = 5
                 search_space = {
                     "g_noise": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
                     "g_1": [500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000],
@@ -1078,32 +992,33 @@ def train():
                     "batch_size": [50, 100, 150, 200, 250, 300, 350],
                 }
 
-                scheduler = PopulationBasedTraining(
-                    time_attr="training_iteration",
-                    perturbation_interval=perturbation_interval,
-                    metric="mean_accuracy",
-                    mode="max",
-                    hyperparam_mutations=search_space,
+                scheduler = ASHAScheduler(
+                    time_attr='training_iteration',
+                    metric='mean_accuracy',
+                    mode='max',
+                    max_t=100,
+                    grace_period=10,
+                    reduction_factor=3,
+                    brackets=1,
                 )
-                search_space['checkpoint_interval'] = perturbation_interval
-                # bayesopt = BayesOptSearch(metric="mean_accuracy", mode="max")
+                bayesopt = BayesOptSearch(metric="mean_accuracy", mode="max")
                 trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 4, "gpu": 1})
                 tuner = tune.Tuner(
                     trainable_with_resource,
                     run_config=ray.train.RunConfig(
-                        name="pbt_test",
+                        verbose=False,
+                        name=f"ngram_{str(n)}_test",
                         # Stop when we've reached a threshold accuracy, or a maximum
                         # training_iteration, whichever comes first
                         stop={"mean_accuracy": 0.96, "training_iteration": 1000},
-                        checkpoint_config=ray.train.CheckpointConfig(
-                            checkpoint_score_attribute="mean_accuracy",
-                            num_to_keep=4,
-                        ),
                         storage_path="/tmp/ray_results",
                     ),
                     tune_config=tune.TuneConfig(
                         scheduler=scheduler,
-                        # search_alg=bayesopt,
+                        search_alg=bayesopt,
+                        metric="mean_accuracy",
+                        mode="max",
+                        reuse_actors=True,
                         num_samples=500,
 
                     ),
