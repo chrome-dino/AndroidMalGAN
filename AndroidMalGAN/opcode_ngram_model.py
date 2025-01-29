@@ -1107,8 +1107,7 @@ def train():
                         num_samples=500,
 
                     ),
-                    param_space=search_space,
-                    log_to_file=False
+                    param_space=search_space
                 )
 
                 results = tuner.fit()
