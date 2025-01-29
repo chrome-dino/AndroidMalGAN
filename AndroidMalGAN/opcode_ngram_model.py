@@ -509,9 +509,9 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
     sys.stdout.write('\nMalGAN training finished!\n')
     # use test data?
 
-    torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + f'_{str(n_count)}_final.pth')
-    if not RAY_TUNE:
 
+    if not RAY_TUNE:
+        torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + f'_{str(n_count)}_final.pth')
         # fig, ax = plt.subplots(1, 5, figsize=(20, 10))
         plt.figure(figsize=(10, 10))
         plt.plot(losses_gen)
