@@ -55,7 +55,7 @@ RAY_TUNE = False
 SPLIT_DATA = True
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
-SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/permissions_'
+SAVED_MODEL_PATH = '../permissions_'
 SAVED_BEST_MODEL_PATH = 'permissions_malgan_best.pth'
 
 MALWARE_CSV = '/home/dsu/Documents/AndroidMalGAN/malware_permissions.csv'
@@ -760,7 +760,7 @@ def train():
             )
             hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max")
             trainable_with_resource = tune.with_resources(
-                partial(train_permissions_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 4, "gpu": 1})
+                partial(train_permissions_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 6, "gpu": 1})
             tuner = tune.Tuner(
                 trainable_with_resource,
                 run_config=ray.train.RunConfig(

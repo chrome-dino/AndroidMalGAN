@@ -5,14 +5,14 @@ from other_apk_feature_extract import labeled_perm_data
 from permissions_model import PermissionsGenerator
 import torch
 
-SAVED_MODEL_PATH = './permissions_malgan.pth'
+SAVED_MODEL_PATH = '../permissions_'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def inject(input_file, copy_file=False, model_path=''):
+def inject(input_file, copy_file=False, blackbox=''):
     os.system('rm -rf temp_file_dir')
     permissions_generator = PermissionsGenerator()
-    permissions_generator.load_state_dict(torch.load(model_path)).to(DEVICE)
+    permissions_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth')).to(DEVICE)
     permissions_generator.eval()
 
     filename = os.path.basename(input_file).split('.')[0]

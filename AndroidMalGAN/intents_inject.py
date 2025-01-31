@@ -5,14 +5,14 @@ from other_apk_feature_extract import labeled_intent_data
 from intents_model import IntentsGenerator
 import torch
 
-SAVED_MODEL_PATH = './intents_malgan.pth'
+SAVED_MODEL_PATH = '../intents_'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def inject(input_file, copy_file=False, model_path=''):
+def inject(input_file, copy_file=False, blackbox=''):
     os.system('rm -rf temp_file_dir')
     intents_generator = IntentsGenerator()
-    intents_generator.load_state_dict(torch.load(model_path))
+    intents_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth'))
     intents_generator.eval()
 
     filename = os.path.basename(input_file).split('.')[0]

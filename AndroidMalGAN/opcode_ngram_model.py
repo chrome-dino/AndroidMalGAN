@@ -54,7 +54,7 @@ RAY_TUNE = True
 SPLIT_DATA = True
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
-SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/opcode_ngram_'
+SAVED_MODEL_PATH = '../opcode_ngram_'
 SAVED_BEST_MODEL_PATH = 'opcode_ngram_malgan_best.pth'
 TEST_HYBRID = False
 
@@ -826,7 +826,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
 def train():
     if RAY_TUNE:
         ray.init()
-    for n in range(3, 11):
+    for n in range(4, 11):
         print('#######################################################################################################')
         print(f'Starting training for {str(n)}-gram MalGAN')
         print('#######################################################################################################')
@@ -903,7 +903,7 @@ def train():
                     brackets=1,
                 )
                 hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max")
-                trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 4, "gpu": 1})
+                trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 6, "gpu": 1})
                 tuner = tune.Tuner(
                     trainable_with_resource,
                     run_config=ray.train.RunConfig(

@@ -98,7 +98,7 @@ def run_tests(n_count=5):
                 s_list[-1] = 'modified_' + f_name
                 s_mod = os.path.join(*s_list)
 
-                intent_inject(s, copy_file=True, model_path='')
+                intent_inject(s, copy_file=True, blackbox=bb_model['name'])
                 intent_ensemble_results.append(hybrid_ensemble_detector(bb_type=bb_model['name'], input_file=s_mod, n_count=n_count))
                 intent_hybrid.append(labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
                 intent_row = labeled_intent_data(root_dir=s_mod, malware=False, single_file=True)
@@ -109,7 +109,7 @@ def run_tests(n_count=5):
                     df = pd.DataFrame(intent_row)
                     df.to_csv(f'malware_intent_modified.csv')
 
-                permission_inject(s, copy_file=True, model_path='')
+                permission_inject(s, copy_file=True, blackbox=bb_model['name'])
                 permission_ensemble_results.append(hybrid_ensemble_detector(bb_type=bb_model['name'], input_file=s_mod, n_count=n_count))
                 permission_hybrid.append(labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
                 permission_row = labeled_perm_data(root_dir=s_mod, malware=False, single_file=True)
@@ -120,7 +120,7 @@ def run_tests(n_count=5):
                     df = pd.DataFrame(permission_row)
                     df.to_csv(f'malware_permission_modified.csv')
 
-                api_inject(s, copy_file=True, model_path=)
+                api_inject(s, copy_file=True, blackbox=bb_model['name'])
                 api_ensemble_results.append(hybrid_ensemble_detector(bb_type=bb_model['name'], input_file=s_mod, n_count=n_count))
                 api_hybrid.append(labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
                 api_row = labeled_api_data(root_dir=s_mod, malware=False, single_file=True)
@@ -131,7 +131,7 @@ def run_tests(n_count=5):
                     df = pd.DataFrame(api_row)
                     df.to_csv(f'malware_api_modified.csv')
 
-                ngrams_inject(s, copy_file=True, n_count=n_count, model_path='')
+                ngrams_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model['name'])
                 ngram_ensemble_results.append(hybrid_ensemble_detector(bb_type=bb_model['name'], input_file=s_mod, n_count=n_count))
                 ngram_row = labeled_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
                 ngram_hybrid.append(labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
@@ -301,7 +301,7 @@ def run_tests(n_count=5):
                 s_list[-1] = 'modified_' + f_name
                 s_mod = os.path.join(*s_list)
 
-                hybrid_inject(s, copy_file=True, n_count=n_count, model=bb_model['name'])
+                hybrid_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model['name'])
                 hybrid_row = labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
                 if os.path.isfile(f'malware_hybrid_modified.csv'):
                     df = pd.DataFrame(hybrid_row)
