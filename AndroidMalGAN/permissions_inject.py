@@ -9,10 +9,10 @@ SAVED_MODEL_PATH = './permissions_malgan.pth'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def inject(input_file, copy_file=False):
+def inject(input_file, copy_file=False, model_path=''):
     os.system('rm -rf temp_file_dir')
     permissions_generator = PermissionsGenerator()
-    permissions_generator.load_state_dict(torch.load(SAVED_MODEL_PATH)).to(DEVICE)
+    permissions_generator.load_state_dict(torch.load(model_path)).to(DEVICE)
     permissions_generator.eval()
 
     filename = os.path.basename(input_file).split('.')[0]

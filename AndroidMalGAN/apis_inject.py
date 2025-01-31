@@ -11,10 +11,10 @@ SAVED_MODEL_PATH = './opcode_ngram_malgan.pth'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def inject(input_file, copy_file=False):
+def inject(input_file, copy_file=False, model_path=''):
     os.system('rm -rf temp_file_dir')
     api_generator = ApisGenerator()
-    api_generator.load_state_dict(torch.load(SAVED_MODEL_PATH)).to(DEVICE)
+    api_generator.load_state_dict(torch.load(model_path)).to(DEVICE)
     api_generator.eval()
 
     with open('api_features.txt', 'r') as file:

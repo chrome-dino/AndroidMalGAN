@@ -36,10 +36,10 @@ def ngram_to_opcode(ngram):
     return final
 
 
-def inject(input_file, copy_file=False, n_count=5):
+def inject(input_file, copy_file=False, n_count=5, model_path=''):
     os.system('rm -rf temp_file_dir')
     ngram_generator = NgramGenerator()
-    ngram_generator.load_state_dict(torch.load(SAVED_MODEL_PATH)).to(DEVICE)
+    ngram_generator.load_state_dict(torch.load(model_path)).to(DEVICE)
     ngram_generator.eval()
 
     with open(f'ngram_features_{str(n_count)}.txt', 'r') as file:

@@ -13,8 +13,16 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/'
 
+def load_mlp(path):
+    load_model = torch.load(path)
+    bb = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+                     l2=len(load_model['fc1.weight']),
+                     l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
+    bb.load_state_dict(load_model)
+    return bb
 
-def hybrid_ensemble_detector(bb_type='', input_file=''):
+
+def hybrid_ensemble_detector(bb_type='', input_file='', n_count=3):
 
     combined = []
 
@@ -32,7 +40,7 @@ def hybrid_ensemble_detector(bb_type='', input_file=''):
         perm_features = file.read()
         perm_features = perm_features.split('\n')
 
-    with open('ngram_features.txt', 'r') as file:
+    with open(f'ngram_{str(n_count)}_features.txt', 'r') as file:
         ngram_features = file.read()
         ngram_features = ngram_features.split('\n')
 
@@ -46,27 +54,23 @@ def hybrid_ensemble_detector(bb_type='', input_file=''):
                                              single_file=True)
     permission_data_malware = labeled_perm_data(root_dir='temp_file_dir', perm_features=perm_features, single_file=True)
     api_data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features, single_file=True)
-    ngram_data_malware = labeled_data(root_dir='.', ngram_features=ngram_features, n_count=5, single_file=True)
+    ngram_data_malware = labeled_data(root_dir='temp_file_dir', ngram_features=ngram_features, n_count=n_count, single_file=True)
 
     combined_results = []
     if bb_type == 'mlp':
-        blackbox = Classifier2()
-        blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{bb_type}_intents_model.pth'))
+        blackbox = load_mlp(SAVED_MODEL_PATH + f'{bb_type}_intents_model.pth')
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(intent_data_malware))
-        blackbox = Classifier2()
-        blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{bb_type}_apis_model.pth'))
+        blackbox = load_mlp(SAVED_MODEL_PATH + f'{bb_type}_apis_model.pth')
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(api_data_malware))
-        blackbox = Classifier2()
-        blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{bb_type}_permissions_model.pth'))
+        blackbox = load_mlp(SAVED_MODEL_PATH + f'{bb_type}_permissions_model.pth')
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(permission_data_malware))
-        blackbox = Classifier2()
-        blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{bb_type}_ngrams_5_model.pth'))
+        blackbox = load_mlp(SAVED_MODEL_PATH + f'{bb_type}_ngrams_{str(n_count)}_model.pth')
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(ngram_data_malware))
@@ -80,7 +84,7 @@ def hybrid_ensemble_detector(bb_type='', input_file=''):
         blackbox = torch.load(f'{bb_type}_permissions_model.pth')
         blackbox = blackbox.to(DEVICE)
         combined_results.append(blackbox.predict_proba(permission_data_malware))
-        blackbox = torch.load(f'{bb_type}_ngrams_5_model.pth')
+        blackbox = torch.load(f'{bb_type}_ngrams_{str(n_count)}_model.pth')
         blackbox = blackbox.to(DEVICE)
         combined_results.append(blackbox.predict_proba(ngram_data_malware))
 

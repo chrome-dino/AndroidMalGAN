@@ -911,7 +911,7 @@ def train():
                         name=f"ngram_{str(n)}_test",
                         # Stop when we've reached a threshold accuracy, or a maximum
                         # training_iteration, whichever comes first
-                        stop={"mean_accuracy": 0.96, "training_iteration": 1000},
+                        stop={"training_iteration": 1000},
                         storage_path="/tmp/ray_results",
                     ),
                     tune_config=tune.TuneConfig(

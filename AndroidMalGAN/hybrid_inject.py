@@ -35,10 +35,10 @@ def ngram_to_opcode(ngram):
     return final
 
 
-def inject(input_file, copy_file=False, n_count=5):
+def inject(input_file, copy_file=False, n_count=5, model_path=''):
     os.system('rm -rf temp_file_dir')
     hybrid_generator = HybridGenerator()
-    hybrid_generator.load_state_dict(torch.load(SAVED_MODEL_PATH)).to(DEVICE)
+    hybrid_generator.load_state_dict(torch.load(model_path)).to(DEVICE)
     hybrid_generator.eval()
 
     filename = os.path.basename(input_file).split('.')[0]
