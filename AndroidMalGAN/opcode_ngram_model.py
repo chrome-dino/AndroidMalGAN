@@ -69,7 +69,7 @@ logging.basicConfig(filename=datetime.now().strftime('ngram_%H_%M_%d_%m_%Y.log')
 
 def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
     # num_epochs = 10000, batch_size = 150, learning_rate = 0.001, l2_lambda = 0.01, g_noise = 0, g_input = 0, g_1 = 0, g_2 = 0, g_3 = 0, c_input = 0, c_1 = 0, c_2 = 0, c_3 = 0
-    os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
+    # os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
 
     classifier_params = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
     generator_params = {'l1': config['g_1'], 'l2': config['g_2'], 'l3': config['g_3'], 'noise': config['g_noise']}
@@ -897,7 +897,7 @@ def train():
                     time_attr='training_iteration',
                     metric='mean_accuracy',
                     mode='max',
-                    max_t=1000,
+                    max_t=500,
                     grace_period=10,
                     reduction_factor=3,
                     brackets=1,
@@ -911,7 +911,7 @@ def train():
                         name=f"ngram_{str(n)}_test",
                         # Stop when we've reached a threshold accuracy, or a maximum
                         # training_iteration, whichever comes first
-                        stop={"training_iteration": 1000},
+                        stop={"training_iteration": 500},
                         storage_path="/tmp/ray_results",
                     ),
                     tune_config=tune.TuneConfig(

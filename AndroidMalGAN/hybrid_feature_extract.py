@@ -103,18 +103,19 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
     with open(f'ngram_features_{str(n_count)}.txt', 'r') as file:
         ngram_features = file.read()
         ngram_features = ngram_features.split('\n')
+        ngram_features = ngram_features[:100]
     with open('intent_features.txt', 'r') as file:
         intent_features = file.read()
         intent_features = intent_features.split('\n')
-
+        intent_features = intent_features[:100]
     with open('api_features.txt', 'r') as file:
         api_features = file.read()
         api_features = api_features.split('\n')
-
+        api_features = api_features[:100]
     with open('perm_features.txt', 'r') as file:
         perm_features = file.read()
         perm_features = perm_features.split('\n')
-
+        perm_features = perm_features[:100]
     with open("hybrid_samples.txt") as samples:
         for s in samples:
             s = s.rstrip()
@@ -154,11 +155,11 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
 
 
 def extract():
-    print(f'extracting malware hybrid dsample_md5sata...')
+    print(f'extracting malware hybrid data...')
     labeled_hybrid_data(root_dir='./samples/malware_samples/decompiled', malware=True, n_count=5)
     print(f'extracting benign hybrid data...')
     labeled_hybrid_data(root_dir='./samples/benign_samples/decompiled', malware=False, n_count=5)
     print(f'finished extracting hybrid data...')
-    print('running feature reduction...')
-    feature_reduction()
+    # print('running feature reduction...')
+    # feature_reduction()
     print('Done!')

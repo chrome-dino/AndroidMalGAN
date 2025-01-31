@@ -758,7 +758,7 @@ def train():
                 time_attr='training_iteration',
                 metric='mean_accuracy',
                 mode='max',
-                max_t=1000,
+                max_t=500,
                 grace_period=10,
                 reduction_factor=3,
                 brackets=1,
@@ -773,7 +773,7 @@ def train():
                     name=f"apis_test",
                     # Stop when we've reached a threshold accuracy, or a maximum
                     # training_iteration, whichever comes first
-                    stop={"training_iteration": 1000},
+                    stop={"training_iteration": 500},
                     storage_path="/tmp/ray_results",
                 ),
                 tune_config=tune.TuneConfig(

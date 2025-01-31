@@ -13,6 +13,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/'
 
+
 def load_mlp(path):
     load_model = torch.load(path)
     bb = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
@@ -88,6 +89,16 @@ def hybrid_ensemble_detector(bb_type='', input_file='', n_count=3):
         blackbox = blackbox.to(DEVICE)
         combined_results.append(blackbox.predict_proba(ngram_data_malware))
 
+    if bb_type == 'mlp':
+        combined_results_2 = []
+        for results in combined_results:
+            combined_results_2.append([[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results])
+        combined_results = combined_results_2
+    if bb_type == 'knn':
+        combined_results_2 = []
+        for results in combined_results:
+            combined_results_2.append(results[:4])
+        combined_results = combined_results_2
     if bb_type == 'svm':
         combined_results_2 = []
         for results in combined_results:
