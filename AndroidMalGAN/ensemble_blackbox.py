@@ -105,14 +105,11 @@ def hybrid_ensemble_detector(bb_type='', input_file='', n_count=3):
             combined_results_2.append([[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results])
         combined_results = combined_results_2
 
-    mal = 0
-    ben = 0
+    mal = False
     for results in combined_results:
-        if results[0][0] < 0.5:
-            ben += 1
-        else:
-            mal += 1
-    if ben > mal:
+        if results[0][0] > 0.5:
+            mal = True
+    if not mal:
         return [0.0, 1.0]
     else:
         return [1.0, 0.0]

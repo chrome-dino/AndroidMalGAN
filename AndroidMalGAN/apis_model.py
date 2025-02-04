@@ -765,7 +765,7 @@ def train():
             )
             hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max")
             trainable_with_resource = tune.with_resources(
-                partial(train_apis_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 6, "gpu": 1})
+                partial(train_apis_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": .5, "gpu": .5})
             tuner = tune.Tuner(
                 trainable_with_resource,
                 run_config=ray.train.RunConfig(
@@ -780,7 +780,7 @@ def train():
                     scheduler=scheduler,
                     search_alg=hyperopt,
                     reuse_actors=True,
-                    num_samples=500,
+                    num_samples=300,
 
                 ),
                 param_space=search_space

@@ -119,19 +119,16 @@ def extract_perms_features(root_dir='.', feature_count=300, exclude=None):
     for root, dirs, files in os.walk(root_dir):  # Scanning through each file in each subdirectory
         for file in files:
             if file == 'AndroidManifest.xml':
-
                 perm_dict = {}
                 file_dest = os.path.join(root, file)
                 try:
-                    root = etree.parse(file_dest, parser=parser)
+                    xml_root = etree.parse(file_dest, parser=parser)
                 except etree.XMLSyntaxError:
                     continue
                 try:
-                    file_permissions = root.findall("uses-permission")
+                    file_permissions = xml_root.findall("uses-permission")
                 except AssertionError:
                     continue
-
-                # row = dict.fromkeys(permissions, 0)
                 for perm in file_permissions:
                     for att in perm.attrib:
                         if 'name' not in att:
