@@ -257,11 +257,11 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
         malware = malware.to(DEVICE)
         gen_malware = generator(malware)
         ################################################
-        binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
-        binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
-        binarized_gen_malware_logical_or = binarized_gen_malware_logical_or.to(DEVICE)
+        # binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+        # binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
+        # binarized_gen_malware_logical_or = binarized_gen_malware_logical_or.to(DEVICE)
         ################################################
-        # binarized_gen_malware_logical_or = gen_malware.to(DEVICE)
+        binarized_gen_malware_logical_or = gen_malware.to(DEVICE)
 
         # with torch.no_grad():
         pred_malware = discriminator(binarized_gen_malware_logical_or)
@@ -826,7 +826,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
 def train():
     if RAY_TUNE:
         ray.init()
-    for n in range(4, 11):
+    for n in range(3, 11):
         print('#######################################################################################################')
         print(f'Starting training for {str(n)}-gram MalGAN')
         print('#######################################################################################################')
@@ -853,7 +853,8 @@ def train():
                      {'name': 'gnb', 'path': f'gnb_ngram_{str(n)}_model.pth'},
                      {'name': 'lr', 'path': f'lr_ngram_{str(n)}_model.pth'},
                      {'name': 'mlp', 'path': f'opcode_ngram_{str(n)}_mlp.pth'},
-                     {'name': 'ensemble', 'path': ''}]
+                     # {'name': 'ensemble', 'path': ''}
+                     ]
         for bb_model in bb_models:
             if bb_model['name'] == 'ensemble':
                 blackbox = None
@@ -897,13 +898,13 @@ def train():
                     time_attr='training_iteration',
                     metric='mean_accuracy',
                     mode='max',
-                    max_t=500,
+                    max_t=1000,
                     grace_period=10,
                     reduction_factor=3,
                     brackets=1,
                 )
                 hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max")
-                trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": .5, "gpu": .5})
+                trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": .25, "gpu": .25})
                 tuner = tune.Tuner(
                     trainable_with_resource,
                     run_config=ray.train.RunConfig(
@@ -911,14 +912,14 @@ def train():
                         name=f"ngram_{str(n)}_test",
                         # Stop when we've reached a threshold accuracy, or a maximum
                         # training_iteration, whichever comes first
-                        stop={"training_iteration": 500},
+                        stop={"training_iteration": 1000},
                         storage_path="/tmp/ray_results",
                     ),
                     tune_config=tune.TuneConfig(
                         scheduler=scheduler,
                         search_alg=hyperopt,
                         reuse_actors=True,
-                        num_samples=300,
+                        num_samples=500,
 
                     ),
                     param_space=search_space

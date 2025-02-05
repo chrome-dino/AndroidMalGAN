@@ -236,11 +236,11 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         malware = malware.to(DEVICE)
         gen_malware = generator(malware)
         ################################################
-        binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
-        binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
-        binarized_gen_malware_logical_or = binarized_gen_malware_logical_or.to(DEVICE)
+        # binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+        # binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
+        # binarized_gen_malware_logical_or = binarized_gen_malware_logical_or.to(DEVICE)
         ################################################
-        # binarized_gen_malware_logical_or = gen_malware.to(DEVICE)
+        binarized_gen_malware_logical_or = gen_malware.to(DEVICE)
 
         # with torch.no_grad():
         pred_malware = discriminator(binarized_gen_malware_logical_or)
@@ -763,14 +763,14 @@ def train():
                 time_attr='training_iteration',
                 metric='mean_accuracy',
                 mode='max',
-                max_t=500,
+                max_t=1000,
                 grace_period=10,
                 reduction_factor=3,
                 brackets=1,
             )
             hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max")
             trainable_with_resource = tune.with_resources(
-                partial(train_intents_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": .5, "gpu": .5})
+                partial(train_intents_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": .25, "gpu": .25})
             tuner = tune.Tuner(
                 trainable_with_resource,
                 run_config=ray.train.RunConfig(
@@ -778,14 +778,14 @@ def train():
                     name=f"intents_test",
                     # Stop when we've reached a threshold accuracy, or a maximum
                     # training_iteration, whichever comes first
-                    stop={"training_iteration": 500},
+                    stop={"training_iteration": 1000},
                     storage_path="/tmp/ray_results",
                 ),
                 tune_config=tune.TuneConfig(
                     scheduler=scheduler,
                     search_alg=hyperopt,
                     reuse_actors=True,
-                    num_samples=300,
+                    num_samples=500,
 
                 ),
                 param_space=search_space

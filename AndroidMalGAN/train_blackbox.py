@@ -121,6 +121,7 @@ def train_mlp(config, data_benign=None, data_malware=None, model=''):
 
 
 def train_blackbox(malware_data, benign_data, model_type, split_data=False):
+    output_file = f'{model_type}_blackbox.txt'
     data_malware = np.loadtxt(malware_data, delimiter=',', skiprows=1)
     data_malware = (data_malware.astype(np.bool_)).astype(float)
 
@@ -165,11 +166,18 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     yPredict = DT.fit(xTrain, yTrain).predict(xTest)
     torch_dt = convert(DT, 'pytorch')
     torch.save(torch_dt, f'../dt_{model_type}_model.pth')
+    with open(output_file, 'a') as f:
+        f.write('DT Classification Report' + '\n')
     print('DT Classification Report')
+    with open(output_file, 'a') as f:
+        f.write(classification_report(yTest, yPredict) + '\n')
     print(classification_report(yTest, yPredict))
     print('DT Accuracy')
+    with open(output_file, 'a') as f:
+        f.write('DT Accuracy' + '\n')
     print(str(accuracy_score(yTest, yPredict)*100))
-
+    with open(output_file, 'a') as f:
+        f.write(str(accuracy_score(yTest, yPredict)*100) + '\n')
     KNN = KNeighborsClassifier()
     yPredict = KNN.fit(xTrain, yTrain).predict(xTest)
     extra_config = {hummingbird.ml.operator_converters.constants.BATCH_SIZE: list(data_tensor_benign.size())[0]}
@@ -177,18 +185,34 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     torch.save(torch_knn, f'../knn_{model_type}_model.pth')
     # pickle.dump(KNN, open('knn_model.sav', 'wb'))
     print('KNN Classification Report')
+    with open(output_file, 'a') as f:
+        f.write('KNN Classification Report' + '\n')
     print(classification_report(yTest, yPredict))
+    with open(output_file, 'a') as f:
+        f.write(classification_report(yTest, yPredict) + '\n')
     print('KNN Accuracy')
+    with open(output_file, 'a') as f:
+        f.write('KNN Accuracy' + '\n')
     print(str(accuracy_score(yTest, yPredict)*100))
+    with open(output_file, 'a') as f:
+        f.write(str(accuracy_score(yTest, yPredict)*100) + '\n')
 
     RF = RandomForestClassifier()
     yPredict = RF.fit(xTrain, yTrain).predict(xTest)
     torch_rf = convert(RF, 'pytorch')
     torch.save(torch_rf, f'../rf_{model_type}_model.pth')
     print('RF Classification Report')
+    with open(output_file, 'a') as f:
+        f.write('RF Classification Report' + '\n')
     print(classification_report(yTest, yPredict))
+    with open(output_file, 'a') as f:
+        f.write(classification_report(yTest, yPredict) + '\n')
     print('RF Accuracy')
+    with open(output_file, 'a') as f:
+        f.write('RF Accuracy' + '\n')
     print(str(accuracy_score(yTest, yPredict)*100))
+    with open(output_file, 'a') as f:
+        f.write(str(accuracy_score(yTest, yPredict)*100) + '\n')
 
     SVM = svm.SVC(kernel='linear')
     # SVM = svm.SVC(kernel='nonlinear')
@@ -196,27 +220,51 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     torch_svm = convert(SVM, 'pytorch')
     torch.save(torch_svm, f'../svm_{model_type}_model.pth')
     print('SVM Classification Report')
+    with open(output_file, 'a') as f:
+        f.write('SVM Classification Report' + '\n')
     print(classification_report(yTest, yPredict))
+    with open(output_file, 'a') as f:
+        f.write(classification_report(yTest, yPredict) + '\n')
     print('SVM Accuracy')
+    with open(output_file, 'a') as f:
+        f.write('SVM Accuracy' + '\n')
     print(str(accuracy_score(yTest, yPredict) * 100))
+    with open(output_file, 'a') as f:
+        f.write(str(accuracy_score(yTest, yPredict)*100) + '\n')
 
     GNB = GaussianNB()
     yPredict = GNB.fit(xTrain, yTrain).predict(xTest)
     torch_gnb = convert(GNB, 'pytorch')
     torch.save(torch_gnb, f'../gnb_{model_type}_model.pth')
     print('GNB Classification Report')
+    with open(output_file, 'a') as f:
+        f.write('GNB Classification Report' + '\n')
     print(classification_report(yTest, yPredict))
+    with open(output_file, 'a') as f:
+        f.write(classification_report(yTest, yPredict) + '\n')
     print('GNB Accuracy')
+    with open(output_file, 'a') as f:
+        f.write('GNB Accuracy' + '\n')
     print(str(accuracy_score(yTest, yPredict) * 100))
+    with open(output_file, 'a') as f:
+        f.write(str(accuracy_score(yTest, yPredict)*100) + '\n')
 
     LR = LogisticRegression()
     yPredict = LR.fit(xTrain, yTrain).predict(xTest)
     torch_lr = convert(LR, 'pytorch')
     torch.save(torch_lr, f'../lr_{model_type}_model.pth')
     print('LR Classification Report')
+    with open(output_file, 'a') as f:
+        f.write('LR Classification Report' + '\n')
     print(classification_report(yTest, yPredict))
+    with open(output_file, 'a') as f:
+        f.write(classification_report(yTest, yPredict) + '\n')
     print('LR Accuracy')
+    with open(output_file, 'a') as f:
+        f.write('LR Accuracy' + '\n')
     print(str(accuracy_score(yTest, yPredict) * 100))
+    with open(output_file, 'a') as f:
+        f.write(str(accuracy_score(yTest, yPredict)*100) + '\n')
 
     # if RAY_TUNE:
     #     tune_config = {
@@ -285,6 +333,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox unmodified malware DT')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((mal/(mal+ben))*100) + '%')
+    with open(output_file, 'a') as f:
+        f.write('Blackbox unmodified malware DT\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
 
     results = torch_dt.predict_proba(data_tensor_benign)
 
@@ -298,6 +350,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox benign DT')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
+    with open(output_file, 'a') as f:
+        f.write('Blackbox benign DT\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
 
     torch_knn = torch.load(f'../knn_{model_type}_model.pth')
     # torch_rf.eval()
@@ -316,6 +372,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox unmodified malware KNN')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((mal/(mal+ben))*100) + '%')
+    with open(output_file, 'a') as f:
+        f.write('Blackbox unmodified malware KNN\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
 
     results = torch_knn.predict_proba(data_tensor_benign)
     results = results[:len(data_tensor_benign)]
@@ -329,6 +389,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox benign KNN')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
+    with open(output_file, 'a') as f:
+        f.write('Blackbox benign KNN\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
 
     torch_rf = torch.load(f'../rf_{model_type}_model.pth')
 
@@ -348,7 +412,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox unmodified malware RF')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((mal/(mal+ben))*100) + '%')
-
+    with open(output_file, 'a') as f:
+        f.write('Blackbox unmodified malware RF\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
     results = torch_rf.predict_proba(data_tensor_benign)
 
     mal = 0
@@ -361,7 +428,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox benign RF')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
-
+    with open(output_file, 'a') as f:
+        f.write('Blackbox benign RF\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
     torch_svm = torch.load(f'../svm_{model_type}_model.pth')
     torch_svm = torch_svm.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE)
@@ -378,7 +448,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox unmodified malware SVM')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((mal/(mal+ben))*100) + '%')
-
+    with open(output_file, 'a') as f:
+        f.write('Blackbox unmodified malware SVM\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
     results = torch_svm.predict_proba(data_tensor_benign)
 
     mal = 0
@@ -392,7 +465,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox benign SVM')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
-
+    with open(output_file, 'a') as f:
+        f.write('Blackbox benign SVM\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
     torch_gnb = torch.load(f'../gnb_{model_type}_model.pth')
     torch_gnb = torch_gnb.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE)
@@ -408,7 +484,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox unmodified malware GNB')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((mal/(mal+ben))*100) + '%')
-
+    with open(output_file, 'a') as f:
+        f.write('Blackbox unmodified malware GNB\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
     results = torch_gnb.predict_proba(data_tensor_benign)
 
     mal = 0
@@ -421,7 +500,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox benign GNB')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
-
+    with open(output_file, 'a') as f:
+        f.write('Blackbox benign GNB\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
     torch_lr = torch.load(f'../lr_{model_type}_model.pth')
     torch_lr = torch_lr.to(DEVICE)
     data_tensor_malware = data_tensor_malware.to(DEVICE)
@@ -437,7 +519,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox unmodified malware LR')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((mal/(mal+ben))*100) + '%')
-
+    with open(output_file, 'a') as f:
+        f.write('Blackbox unmodified malware LR\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
     results = torch_lr.predict_proba(data_tensor_benign)
 
     mal = 0
@@ -450,7 +535,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox benign LR')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
-
+    with open(output_file, 'a') as f:
+        f.write('Blackbox benign LR\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
     load_model = torch.load(SAVED_MODEL_PATH + model_type + '_mlp.pth')
     torch_mlp = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']), l2=len(load_model['fc1.weight']),
                      l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
@@ -471,7 +559,10 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox unmodified malware MLP')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((mal/(mal+ben))*100) + '%')
-
+    with open(output_file, 'a') as f:
+        f.write('Blackbox unmodified malware MLP\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
     results = torch_mlp(data_tensor_benign)
 
     mal = 0
@@ -484,3 +575,7 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     print('Blackbox benign MLP')
     print(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
     print('Accuracy:' + str((ben/(mal+ben))*100) + '%')
+    with open(output_file, 'a') as f:
+        f.write('Blackbox benign MLP\n')
+        f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
+        f.write('Accuracy:' + str((mal/(mal+ben))*100) + '%\n')
