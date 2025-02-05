@@ -3,3 +3,9 @@
 /test/
 /tmp_ngrams_benign.txt
 /tmp_ngrams_malware.txt
+/api_store/
+/intent_store/
+/ngram_store/
+/perm_store/
+/*.log
+/AndroidMalGAN/*.log
