@@ -240,12 +240,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         discriminator.eval()
         malware = malware.to(DEVICE)
         gen_malware = generator(malware)
-        ################################################
-        binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
-        binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
-        binarized_gen_malware_logical_or = binarized_gen_malware_logical_or.to(DEVICE)
-        ################################################
-        # binarized_gen_malware_logical_or = gen_malware.to(DEVICE)
+        binarized_gen_malware_logical_or = gen_malware.to(DEVICE)
 
         # with torch.no_grad():
         pred_malware = discriminator(binarized_gen_malware_logical_or)

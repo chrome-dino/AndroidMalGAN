@@ -100,22 +100,42 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
                         break
 
     count = 0
-    with open(f'ngram_features_{str(n_count)}.txt', 'r') as file:
-        ngram_features = file.read()
-        ngram_features = ngram_features.split('\n')
-        ngram_features = ngram_features[:100]
-    with open('intent_features.txt', 'r') as file:
-        intent_features = file.read()
-        intent_features = intent_features.split('\n')
-        intent_features = intent_features[:100]
-    with open('api_features.txt', 'r') as file:
-        api_features = file.read()
-        api_features = api_features.split('\n')
-        api_features = api_features[:100]
-    with open('perm_features.txt', 'r') as file:
-        perm_features = file.read()
-        perm_features = perm_features.split('\n')
-        perm_features = perm_features[:100]
+    with open(f'malware_features_{str(n_count)}.txt', 'r') as file:
+        mal_ngrams = file.read()
+        mal_ngrams = mal_ngrams.split('\n')
+        mal_ngrams = mal_ngrams[:100]
+    with open(f'benign_features_{str(n_count)}.txt', 'r') as file:
+        ben_ngrams = file.read()
+        ben_ngrams = ben_ngrams.split('\n')
+        ben_ngrams = ben_ngrams[:15]
+    ngram_features = list(set(mal_ngrams + ben_ngrams))
+    with open('malware_intents.txt', 'r') as file:
+        mal_intents = file.read()
+        mal_intents = mal_intents.split('\n')
+        mal_intents = mal_intents[:100]
+    with open('benign_intents.txt', 'r') as file:
+        ben_intents = file.read()
+        ben_intents = ben_intents.split('\n')
+        ben_intents = ben_intents[:15]
+    intent_features = list(set(mal_intents + ben_intents))
+    with open('malware_apis.txt', 'r') as file:
+        mal_apis = file.read()
+        mal_apis = mal_apis.split('\n')
+        mal_apis = mal_apis[:100]
+    with open('benign_apis.txt', 'r') as file:
+        ben_apis = file.read()
+        ben_apis = ben_apis.split('\n')
+        ben_apis = ben_apis[:15]
+    api_features = list(set(mal_apis + ben_apis))
+    with open('malware_perms.txt', 'r') as file:
+        mal_perms = file.read()
+        mal_perms = mal_perms.split('\n')
+        mal_perms = mal_perms[:100]
+    with open('benign_perms.txt', 'r') as file:
+        ben_perms = file.read()
+        ben_perms = ben_perms.split('\n')
+        ben_perms = ben_perms[:15]
+    perm_features = list(set(mal_perms + ben_perms))
     with open("hybrid_samples.txt") as samples:
         for s in samples:
             s = s.rstrip()

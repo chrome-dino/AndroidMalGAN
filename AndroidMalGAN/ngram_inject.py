@@ -7,7 +7,7 @@ import torch
 import numpy as np
 import pandas as pd
 
-SAVED_MODEL_PATH = '../opcode_ngram_'
+SAVED_MODEL_PATH = '../opcode_ngram'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -37,7 +37,7 @@ def ngram_to_opcode(ngram):
 
 
 def inject(input_file, copy_file=False, n_count=5, blackbox=''):
-    os.system('rm -rf temp_file_dir')
+    os.system('rm -rf temp_file_dir/*')
     ngram_generator = NgramGenerator()
     ngram_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + f'_{str(n_count)}_final.pth')).to(DEVICE)
     ngram_generator.eval()
@@ -46,9 +46,9 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
         ngram_features = file.read()
         ngram_features = ngram_features.split('\n')
 
-    filename = os.path.basename(input_file).split('.')[0]
-    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir/{filename}')
-    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
+    filename = os.path.basename(input_file).split('/', -1)[1].split('.', -1)[0]
+    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
+    command = f'apktool d -f {input_file} -o temp_file_dir'
     command = command.split()
     subprocess.run(command)
 
@@ -105,12 +105,19 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     with open(inject_file, 'a') as file:
         file.write(smali_inject)
 
-    if copy_file:
-        print(f'Compiling file: {filename} with command: apktool b modified_{input_file}')
-        command = f'apktool b {input_file}'
-    else:
-        print(f'Compiling file: {filename} with command: apktool b {input_file}')
-        command = f'apktool b {input_file}'
+    print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
+    command = f'apktool b temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
+
+    if copy_file:
+        file_path = os.path.basename(input_file).split('/', -1)
+        copy_path = file_path[0] + f'/modified_{file_path[1]}'
+        command = f'mv -f temp_file_dir/{filename}.apk {copy_path}'
+        command = command.split()
+        subprocess.run(command)
+    else:
+        command = f'mv -f temp_file_dir/{filename}.apk {input_file}'
+        command = command.split()
+        subprocess.run(command)
     print(f'Finished!')

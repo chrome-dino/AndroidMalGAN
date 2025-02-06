@@ -7,12 +7,12 @@ import torch
 import numpy as np
 import pandas as pd
 
-SAVED_MODEL_PATH = '../apis'
+SAVED_MODEL_PATH = '../apis_'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def inject(input_file, copy_file=False, blackbox=''):
-    os.system('rm -rf temp_file_dir')
+    os.system('rm -rf temp_file_dir/*')
     api_generator = ApisGenerator()
     api_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth')).to(DEVICE)
     api_generator.eval()
@@ -21,9 +21,9 @@ def inject(input_file, copy_file=False, blackbox=''):
         api_features = file.read()
         api_features = api_features.split('\n')
 
-    filename = os.path.basename(input_file).split('.')[0]
-    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir/{filename}')
-    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
+    filename = os.path.basename(input_file).split('/', -1)[1].split('.', -1)[0]
+    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
+    command = f'apktool d -f {input_file} -o temp_file_dir'
     command = command.split()
     subprocess.run(command)
     data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features,
@@ -81,12 +81,19 @@ def inject(input_file, copy_file=False, blackbox=''):
     with open(inject_file, 'a') as file:
         file.write(smali_inject)
 
-    if copy_file:
-        print(f'Compiling file: {filename} with command: apktool b modified_{input_file}')
-        command = f'apktool b {input_file}'
-    else:
-        print(f'Compiling file: {filename} with command: apktool b {input_file}')
-        command = f'apktool b {input_file}'
+    print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
+    command = f'apktool b temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
+
+    if copy_file:
+        file_path = os.path.basename(input_file).split('/', -1)
+        copy_path = file_path[0] + f'/modified_{file_path[1]}'
+        command = f'mv -f temp_file_dir/{filename}.apk {copy_path}'
+        command = command.split()
+        subprocess.run(command)
+    else:
+        command = f'mv -f temp_file_dir/{filename}.apk {input_file}'
+        command = command.split()
+        subprocess.run(command)
     print(f'Finished!')

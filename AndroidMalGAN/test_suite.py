@@ -141,11 +141,11 @@ def run_tests(n_count=5):
                 else:
                     df = pd.DataFrame([ngram_row])
                     df.to_csv(f'malware_ngram_{str(n_count)}_modified.csv')
-                daisy_chain_attack(file_path=s, n_count=n_count)
+                daisy_chain_attack(file_path=s, n_count=n_count, blackbox=bb_model['name'])
                 daisy_ensemble_results.append(hybrid_ensemble_detector(bb_type=bb_model['name'], input_file=s_mod, n_count=n_count))
                 daisychain_hybrid.append(labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
 
-                hybrid_inject(s, copy_file=True, n_count=n_count, model_path='')
+                hybrid_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model['name'])
                 hybrid_results.append(hybrid_ensemble_detector(bb_type=bb_model['name'], input_file=s_mod, n_count=n_count))
 
             intent_results = blackbox_test(test_data=intent_hybrid, blackbox=blackbox, bb_name=bb_model['name'])
