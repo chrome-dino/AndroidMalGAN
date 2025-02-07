@@ -87,8 +87,8 @@ def train_ngram_model(config, blackbox=None, bb_name='', n_count=3):
 
     # with open('malware_ngram.csv') as f:
     #     ncols = len(f.readline().split(','))
-    malware_csv = f'/home/dsu/Documents/AndroidMalGAN/malware_ngram_{str(n_count)}.csv'
-    benign_csv = f'/home/dsu/Documents/AndroidMalGAN/benign_ngram_{str(n_count)}.csv'
+    malware_csv = f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\malware_ngram_{str(n_count)}.csv'
+    benign_csv = f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\benign_ngram_{str(n_count)}.csv'
     data_malware = np.loadtxt(malware_csv, delimiter=',', skiprows=1)
     # data_malware = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
     data_malware = (data_malware.astype(np.bool_)).astype(float)
@@ -826,7 +826,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
 def train():
     if RAY_TUNE:
         ray.init()
-    for n in range(3, 11):
+    for n in range(8, 11):
         print('#######################################################################################################')
         print(f'Starting training for {str(n)}-gram MalGAN')
         print('#######################################################################################################')
@@ -904,7 +904,7 @@ def train():
                     brackets=1,
                 )
                 hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max")
-                trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": .25, "gpu": .25})
+                trainable_with_resource = tune.with_resources(partial(train_ngram_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": .25, "gpu": .05})
                 tuner = tune.Tuner(
                     trainable_with_resource,
                     run_config=ray.train.RunConfig(
@@ -919,8 +919,8 @@ def train():
                         scheduler=scheduler,
                         search_alg=hyperopt,
                         reuse_actors=True,
-                        num_samples=500,
-
+                        num_samples=250,
+                        trial_dirname_creator=custom_dirname_creator
                     ),
                     param_space=search_space
                 )
@@ -940,7 +940,7 @@ def train():
                 plt.ylabel("Mean Accuracy")
                 plt.title(f'Ngram {str(n)} Opcode Ray Tune Mean Accuracy ({str(bb_model["name"])})')
                 plt.savefig(
-                    os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                    os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
                                  f'ngram_{str(n)}_' + bb_model['name'] + '_ray_mean_acc.png'),
                     bbox_inches='tight')
                 plt.close('all')
@@ -951,7 +951,7 @@ def train():
                 plt.ylabel("Generator Loss")
                 plt.title(f'Ngram {str(n)} Opcode Ray Tune Generator Loss ({str(bb_model["name"])})')
                 plt.savefig(
-                    os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                    os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
                                  f'ngram_{str(n)}_' + bb_model['name'] + '_ray_gen_loss.png'),
                     bbox_inches='tight')
                 plt.close('all')
@@ -962,7 +962,7 @@ def train():
                 plt.ylabel("Discriminator Loss")
                 plt.title(f'Ngram {str(n)} Opcode Ray Tune Discriminator Loss ({str(bb_model["name"])})')
                 plt.savefig(
-                    os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                    os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
                                  f'ngram_{str(n)}_' + bb_model['name'] + '_ray_disc_loss.png'),
                     bbox_inches='tight')
                 plt.close('all')
@@ -971,11 +971,16 @@ def train():
                     json.dump(best_config, f)
 
             else:
-                with open(f'../config_ngram_{str(n)}_{bb_model["name"]}_malgan.json', 'r') as f:
+                with open(f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\config_ngram_{str(n)}_{bb_model["name"]}_malgan.json', 'r') as f:
                     config = json.load(f)
                     train_ngram_model(config, blackbox=blackbox, bb_name=bb_model['name'], n_count=n)
     LOGGER.info('Finished!')
     print('Finished!')
+
+
+def custom_dirname_creator(trial):
+    # Create a custom directory name based on the trial
+    return f"trial_{trial.trial_id}"
 
 
 train()

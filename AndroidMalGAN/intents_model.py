@@ -35,10 +35,7 @@ matplotlib_inline.backend_inline.set_matplotlib_formats('svg')
 configs = configparser.ConfigParser()
 configs.read("settings.ini")
 
-BB_MODELS = [{'name': 'rf', 'path': '../rf_intents_model.pth'}, {'name': 'dt', 'path': '../dt_intents_model.pth'},
-             {'name': 'svm', 'path': '../svm_intents_model.pth'}, {'name': 'knn', 'path': '../knn_intents_model.pth'},
-             {'name': 'gnb', 'path': '../gnb_intents_model.pth'}, {'name': 'lr', 'path': '../lr_intents_model.pth'},
-             {'name': 'mlp', 'path': '../intents_mlp.pth'}, {'name': 'ensemble', 'path': ''}]
+BB_MODELS = [{'name': 'ensemble', 'path': ''}]
 
 # FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
 # LEARNING_RATE = 0.0002
@@ -50,7 +47,7 @@ L2_LAMBDA = 0.01
 BB_L2_LAMBDA = 0.01
 BATCH_SIZE = 150
 NOISE = 0
-TRAIN_BLACKBOX = True
+TRAIN_BLACKBOX = False
 RAY_TUNE = True
 SPLIT_DATA = True
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -58,8 +55,8 @@ DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '../intents_'
 SAVED_BEST_MODEL_PATH = 'intents_malgan_best.pth'
 
-MALWARE_CSV = '/home/dsu/Documents/AndroidMalGAN/malware_intents.csv'
-BENIGN_CSV = '/home/dsu/Documents/AndroidMalGAN/benign_intents.csv'
+MALWARE_CSV = 'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\malware_intents.csv'
+BENIGN_CSV = 'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\benign_intents.csv'
 # BB_SAVED_MODEL_PATH = 'opcode_ngram_blackbox.pth'
 
 os.environ['TUNE_DISABLE_STRICT_METRIC_CHECKING'] = '1'
@@ -165,6 +162,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
             results = ensemble_detector(model_type=f'intents', test_data=benign)
             results = np.array([[row[1]] for row in results])
             bb_benign_labels = torch.from_numpy(results).type(torch.float32).to(DEVICE)
+            benign = benign.to(DEVICE)
         else:
             if bb_name == 'rf' or bb_name == 'knn':
                 benign = benign.to(DEVICE_CPU)
@@ -785,8 +783,8 @@ def train():
                     scheduler=scheduler,
                     search_alg=hyperopt,
                     reuse_actors=True,
-                    num_samples=500,
-
+                    num_samples=250,
+                    trial_dirname_creator=custom_dirname_creator
                 ),
                 param_space=search_space
             )
@@ -806,7 +804,7 @@ def train():
             plt.ylabel("Mean Accuracy")
             plt.title(f'Intents Ray Tune Mean Accuracy ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
                              f'intents_' + bb_model['name'] + '_ray_mean_acc.png'),
                 bbox_inches='tight')
             plt.close('all')
@@ -817,7 +815,7 @@ def train():
             plt.ylabel("Generator Loss")
             plt.title(f'Intents Ray Tune Generator Loss ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
                              f'intents_' + bb_model['name'] + '_ray_gen_loss.png'),
                 bbox_inches='tight')
             plt.close('all')
@@ -828,15 +826,20 @@ def train():
             plt.ylabel("Discriminator Loss")
             plt.title(f'Intents Ray Tune Discriminator Loss ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
                              f'intents_' + bb_model['name'] + '_ray_disc_loss.png'),
                 bbox_inches='tight')
             plt.close('all')
-            with open(f'../config_intents_{bb_model["name"]}_malgan.json', 'w') as f:
+            with open(f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\config_intents_{bb_model["name"]}_malgan.json', 'w') as f:
                 json.dump(best_config, f)
         else:
             with open(f'../config_intents_{bb_model["name"]}_malgan.json', 'r') as f:
                 config = json.load(f)
                 train_intents_model(config, blackbox=blackbox, bb_name=bb_model['name'])
     print('Finished!')
+
+def custom_dirname_creator(trial):
+    # Create a custom directory name based on the trial
+    return f"trial_{trial.trial_id}"
+
 train()

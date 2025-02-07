@@ -139,15 +139,16 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
     with open("hybrid_samples.txt") as samples:
         for s in samples:
             s = s.rstrip()
-            file_ngrams = labeled_ngram_data(root_dir=s, ngram_features=ngram_features, malware=True, n_count=n_count,
+            file_ngrams = labeled_ngram_data(root_dir=s, ngram_features=ngram_features, malware=malware, n_count=n_count,
                                              single_file=True)
-            file_apis = labeled_api_data(root_dir=s, api_features=api_features, malware=api_features,
+            file_apis = labeled_api_data(root_dir=s, api_features=api_features, malware=malware,
                                          single_file=True)
 
-            file_permissions = labeled_perm_data(root_dir=s, perm_features=perm_features, single_file=True)
-            file_intents = labeled_intent_data(root_dir=s, intent_features=intent_features,
+            file_permissions = labeled_perm_data(root_dir=s, perm_features=perm_features, malware=malware, single_file=True)
+            file_intents = labeled_intent_data(root_dir=s, intent_features=intent_features, malware=malware,
                                                single_file=True)
-
+            if file_ngrams is None or file_apis is None or file_permissions is None or file_intents is None:
+                continue
             row = file_intents | file_permissions | file_apis | file_ngrams
             if not single_file:
                 if malware:
@@ -176,10 +177,12 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
 
 def extract():
     print(f'extracting malware hybrid data...')
-    labeled_hybrid_data(root_dir='./samples/malware_samples/decompiled', malware=True, n_count=5)
+    labeled_hybrid_data(root_dir='../samples/malware_samples/decompiled', malware=True, n_count=5)
     print(f'extracting benign hybrid data...')
-    labeled_hybrid_data(root_dir='./samples/benign_samples/decompiled', malware=False, n_count=5)
+    labeled_hybrid_data(root_dir='../samples/benign_samples/decompiled', malware=False, n_count=5)
     print(f'finished extracting hybrid data...')
     # print('running feature reduction...')
     # feature_reduction()
     print('Done!')
+
+extract()

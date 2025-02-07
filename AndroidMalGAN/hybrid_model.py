@@ -170,6 +170,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
             results = ensemble_detector(model_type=f'hybrid_5', test_data=benign)
             results = np.array([[row[1]] for row in results])
             bb_benign_labels = torch.from_numpy(results).type(torch.float32).to(DEVICE)
+            benign = benign.to(DEVICE)
         else:
             if bb_name == 'rf' or bb_name == 'knn':
                 benign = benign.to(DEVICE_CPU)
@@ -273,9 +274,9 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
             disDecs_dev_gen_mal[e, 0] = torch.mean((pred_malware > .5).float()).detach()
         gen_malware = generator(malware)
         gen_malware = gen_malware.to(DEVICE)
-        binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
-        binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
-        gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
+        # binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+        # binarized_gen_malware_logical_or = torch.logical_or(malware, binarized_gen_malware).float()
+        gen_malware = gen_malware.to(DEVICE)
 
         if bb_name == 'ensemble':
             results = ensemble_detector(model_type=f'hybrid_5', test_data=gen_malware)
@@ -681,7 +682,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
         else:
             # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
             load_model = torch.load(bb_model['path'])
-            bb = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+            bb = Classifier2(d_input_dim=460, l1=len(load_model['input.weight']),
                              l2=len(load_model['fc1.weight']),
                              l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
             bb.load_state_dict(load_model)
@@ -738,7 +739,7 @@ def train():
                 blackbox = blackbox.to(DEVICE)
             else:
                 load_model = torch.load(bb_model['path'])
-                blackbox = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+                blackbox = Classifier2(d_input_dim=460, l1=len(load_model['input.weight']),
                                        l2=len(load_model['fc1.weight']),
                                        l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
 
@@ -765,7 +766,7 @@ def train():
                 time_attr='training_iteration',
                 metric='mean_accuracy',
                 mode='max',
-                max_t=500,
+                max_t=1000,
                 grace_period=10,
                 reduction_factor=3,
                 brackets=1,
@@ -780,15 +781,15 @@ def train():
                     name=f"hybrid_5_test",
                     # Stop when we've reached a threshold accuracy, or a maximum
                     # training_iteration, whichever comes first
-                    stop={"training_iteration": 500},
+                    stop={"training_iteration": 1000},
                     storage_path="/tmp/ray_results",
                 ),
                 tune_config=tune.TuneConfig(
                     scheduler=scheduler,
                     search_alg=hyperopt,
                     reuse_actors=True,
-                    num_samples=500,
-
+                    num_samples=250,
+                    trial_dirname_creator=custom_dirname_creator
                 ),
                 param_space=search_space
             )
@@ -842,3 +843,8 @@ def train():
                 train_hybrid_model(config, blackbox=blackbox, bb_name=bb_model['name'])
     print('Finished!')
 
+def custom_dirname_creator(trial):
+    # Create a custom directory name based on the trial
+    return f"trial_{trial.trial_id}"
+
+train()

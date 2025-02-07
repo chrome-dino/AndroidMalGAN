@@ -1,0 +1,228 @@
+DT Classification Report
+              precision    recall  f1-score   support
+
+           0       0.81      0.97      0.88       346
+           1       0.96      0.75      0.84       313
+
+    accuracy                           0.86       659
+   macro avg       0.88      0.86      0.86       659
+weighted avg       0.88      0.86      0.86       659
+
+DT Accuracy
+86.49468892261002
+KNN Classification Report
+              precision    recall  f1-score   support
+
+           0       0.92      0.79      0.85       346
+           1       0.80      0.92      0.86       313
+
+    accuracy                           0.85       659
+   macro avg       0.86      0.85      0.85       659
+weighted avg       0.86      0.85      0.85       659
+
+KNN Accuracy
+85.12898330804249
+RF Classification Report
+              precision    recall  f1-score   support
+
+           0       0.82      0.97      0.88       346
+           1       0.95      0.76      0.85       313
+
+    accuracy                           0.87       659
+   macro avg       0.88      0.86      0.87       659
+weighted avg       0.88      0.87      0.87       659
+
+RF Accuracy
+86.79817905918058
+SVM Classification Report
+              precision    recall  f1-score   support
+
+           0       0.97      0.77      0.86       346
+           1       0.80      0.98      0.88       313
+
+    accuracy                           0.87       659
+   macro avg       0.89      0.88      0.87       659
+weighted avg       0.89      0.87      0.87       659
+
+SVM Accuracy
+87.10166919575114
+GNB Classification Report
+              precision    recall  f1-score   support
+
+           0       0.98      0.46      0.62       346
+           1       0.62      0.99      0.76       313
+
+    accuracy                           0.71       659
+   macro avg       0.80      0.72      0.69       659
+weighted avg       0.81      0.71      0.69       659
+
+GNB Accuracy
+71.01669195751138
+LR Classification Report
+              precision    recall  f1-score   support
+
+           0       0.97      0.77      0.86       346
+           1       0.79      0.97      0.87       313
+
+    accuracy                           0.86       659
+   macro avg       0.88      0.87      0.86       659
+weighted avg       0.88      0.86      0.86       659
+
+LR Accuracy
+86.49468892261002
+Blackbox unmodified malware DT
+test set predicted: 72 benign files and 3220 malicious files
+Accuracy:97.81287970838396%
+Blackbox benign DT
+test set predicted: 2497 benign files and 795 malicious files
+Accuracy:75.8505467800729%
+Blackbox unmodified malware KNN
+test set predicted: 820 benign files and 2472 malicious files
+Accuracy:75.09113001215067%
+Blackbox benign KNN
+test set predicted: 3113 benign files and 179 malicious files
+Accuracy:94.5625759416768%
+Blackbox unmodified malware RF
+test set predicted: 84 benign files and 3208 malicious files
+Accuracy:97.44835965978129%
+Blackbox benign RF
+test set predicted: 2511 benign files and 781 malicious files
+Accuracy:76.27582017010936%
+Blackbox unmodified malware SVM
+test set predicted: 825 benign files and 2467 malicious files
+Accuracy:74.93924665856622%
+Blackbox benign SVM
+test set predicted: 3148 benign files and 144 malicious files
+Accuracy:95.62575941676792%
+Blackbox unmodified malware GNB
+test set predicted: 1823 benign files and 1469 malicious files
+Accuracy:44.62332928311057%
+Blackbox benign GNB
+test set predicted: 3286 benign files and 6 malicious files
+Accuracy:99.81773997569866%
+Blackbox unmodified malware LR
+test set predicted: 3292 benign files and 0 malicious files
+Accuracy:0.0%
+Blackbox benign LR
+test set predicted: 3292 benign files and 0 malicious files
+Accuracy:100.0%
+Blackbox unmodified malware MLP
+test set predicted: 59 benign files and 3233 malicious files
+Accuracy:98.20777642770352%
+Blackbox benign MLP
+test set predicted: 2479 benign files and 813 malicious files
+Accuracy:75.30376670716889%
+DT Classification Report
+              precision    recall  f1-score   support
+
+           0       0.81      0.97      0.88       346
+           1       0.96      0.75      0.84       313
+
+    accuracy                           0.87       659
+   macro avg       0.89      0.86      0.86       659
+weighted avg       0.88      0.87      0.86       659
+
+DT Accuracy
+86.6464339908953
+KNN Classification Report
+              precision    recall  f1-score   support
+
+           0       0.92      0.79      0.85       346
+           1       0.80      0.92      0.86       313
+
+    accuracy                           0.85       659
+   macro avg       0.86      0.85      0.85       659
+weighted avg       0.86      0.85      0.85       659
+
+KNN Accuracy
+85.12898330804249
+RF Classification Report
+              precision    recall  f1-score   support
+
+           0       0.81      0.97      0.88       346
+           1       0.96      0.75      0.84       313
+
+    accuracy                           0.87       659
+   macro avg       0.89      0.86      0.86       659
+weighted avg       0.88      0.87      0.86       659
+
+RF Accuracy
+86.6464339908953
+SVM Classification Report
+              precision    recall  f1-score   support
+
+           0       0.97      0.77      0.86       346
+           1       0.80      0.98      0.88       313
+
+    accuracy                           0.87       659
+   macro avg       0.89      0.88      0.87       659
+weighted avg       0.89      0.87      0.87       659
+
+SVM Accuracy
+87.10166919575114
+GNB Classification Report
+              precision    recall  f1-score   support
+
+           0       0.98      0.46      0.62       346
+           1       0.62      0.99      0.76       313
+
+    accuracy                           0.71       659
+   macro avg       0.80      0.72      0.69       659
+weighted avg       0.81      0.71      0.69       659
+
+GNB Accuracy
+71.01669195751138
+LR Classification Report
+              precision    recall  f1-score   support
+
+           0       0.97      0.77      0.86       346
+           1       0.79      0.97      0.87       313
+
+    accuracy                           0.86       659
+   macro avg       0.88      0.87      0.86       659
+weighted avg       0.88      0.86      0.86       659
+
+LR Accuracy
+86.49468892261002
+Blackbox unmodified malware DT
+test set predicted: 72 benign files and 3220 malicious files
+Accuracy:97.81287970838396%
+Blackbox benign DT
+test set predicted: 2498 benign files and 794 malicious files
+Accuracy:75.8809234507898%
+Blackbox unmodified malware KNN
+test set predicted: 820 benign files and 2472 malicious files
+Accuracy:75.09113001215067%
+Blackbox benign KNN
+test set predicted: 3113 benign files and 179 malicious files
+Accuracy:94.5625759416768%
+Blackbox unmodified malware RF
+test set predicted: 77 benign files and 3215 malicious files
+Accuracy:97.66099635479951%
+Blackbox benign RF
+test set predicted: 2503 benign files and 789 malicious files
+Accuracy:76.03280680437425%
+Blackbox unmodified malware SVM
+test set predicted: 825 benign files and 2467 malicious files
+Accuracy:74.93924665856622%
+Blackbox benign SVM
+test set predicted: 3148 benign files and 144 malicious files
+Accuracy:95.62575941676792%
+Blackbox unmodified malware GNB
+test set predicted: 1823 benign files and 1469 malicious files
+Accuracy:44.62332928311057%
+Blackbox benign GNB
+test set predicted: 3286 benign files and 6 malicious files
+Accuracy:99.81773997569866%
+Blackbox unmodified malware LR
+test set predicted: 3292 benign files and 0 malicious files
+Accuracy:0.0%
+Blackbox benign LR
+test set predicted: 3292 benign files and 0 malicious files
+Accuracy:100.0%
+Blackbox unmodified malware MLP
+test set predicted: 81 benign files and 3211 malicious files
+Accuracy:97.53948967193196%
+Blackbox benign MLP
+test set predicted: 2516 benign files and 776 malicious files
+Accuracy:76.42770352369381%

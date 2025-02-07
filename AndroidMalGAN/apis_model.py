@@ -35,11 +35,10 @@ matplotlib_inline.backend_inline.set_matplotlib_formats('svg')
 configs = configparser.ConfigParser()
 configs.read("settings.ini")
 
-BB_MODELS = [{'name': 'dt', 'path': '../dt_apis_model.pth'}]
-# BB_MODELS = [{'name': 'rf', 'path': '../rf_apis_model.pth'}, {'name': 'dt', 'path': '../dt_apis_model.pth'},
-#              {'name': 'svm', 'path': '../svm_apis_model.pth'}, {'name': 'knn', 'path': '../knn_apis_model.pth'},
-#              {'name': 'gnb', 'path': '../gnb_apis_model.pth'}, {'name': 'lr', 'path': '../lr_apis_model.pth'},
-#              {'name': 'mlp', 'path': '../apis_mlp.pth'}, {'name': 'ensemble', 'path': ''}]
+BB_MODELS = [{'name': 'rf', 'path': '../rf_apis_model.pth'}, {'name': 'dt', 'path': '../dt_apis_model.pth'},
+             {'name': 'svm', 'path': '../svm_apis_model.pth'}, {'name': 'knn', 'path': '../knn_apis_model.pth'},
+             {'name': 'gnb', 'path': '../gnb_apis_model.pth'}, {'name': 'lr', 'path': '../lr_apis_model.pth'},
+             {'name': 'mlp', 'path': '../apis_mlp.pth'}, {'name': 'ensemble', 'path': ''}]
 
 # FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
 # LEARNING_RATE = 0.0002
@@ -51,16 +50,16 @@ L2_LAMBDA = 0.01
 BB_L2_LAMBDA = 0.01
 BATCH_SIZE = 150
 NOISE = 0
-TRAIN_BLACKBOX = True
-RAY_TUNE = True
+TRAIN_BLACKBOX = False
+RAY_TUNE = False
 SPLIT_DATA = True
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '../apis_'
 SAVED_BEST_MODEL_PATH = 'apis_malgan_best.pth'
 
-MALWARE_CSV = '/home/dsu/Documents/AndroidMalGAN/malware_apis.csv'
-BENIGN_CSV = '/home/dsu/Documents/AndroidMalGAN/benign_apis.csv'
+MALWARE_CSV = 'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\malware_apis.csv'
+BENIGN_CSV = 'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\benign_apis.csv'
 # BB_SAVED_MODEL_PATH = 'opcode_ngram_blackbox.pth'
 
 os.environ['TUNE_DISABLE_STRICT_METRIC_CHECKING'] = '1'
@@ -165,6 +164,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
             results = ensemble_detector(model_type=f'apis', test_data=benign)
             results = np.array([[row[1]] for row in results])
             bb_benign_labels = torch.from_numpy(results).type(torch.float32).to(DEVICE)
+            benign = benign.to(DEVICE)
         else:
             if bb_name == 'rf' or bb_name == 'knn':
                 benign = benign.to(DEVICE_CPU)
@@ -326,7 +326,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
         plt.title(f'APIs Model gen loss ({str(bb_name)})')
         # plt.legend(['Discrimator', 'Generator'])
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'apis_' + bb_name + '_gen_loss.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -338,7 +338,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
         plt.title(f'APIs Model disc loss ({str(bb_name)})')
         # plt.legend(['Discrimator', 'Generator'])
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'apis_' + bb_name + '_disc_loss.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -350,7 +350,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Generator loss')
         plt.title(f'APIs Model Loss Mapping ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'apis_' + bb_name + '_loss_map.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -361,7 +361,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'APIs Discriminator Output Train Set Benign ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'apis_' + bb_name + '_disc_train_ben.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -372,7 +372,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'APIs Discriminator Output Train Set Malware ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'apis_' + bb_name + '_disc_train_mal.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -383,7 +383,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'APIs Discriminator Output Dev Set Benign ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'apis_' + bb_name + '_disc_dev_ben.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -394,7 +394,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'APIs Discriminator Output Dev Set Malware ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'apis_' + bb_name + '_disc_dev_mal.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -405,7 +405,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'APIs Discriminator Output Dev Set Gen Malware ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'apis_' + bb_name + '_disc_dev_gen_mal.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -416,7 +416,7 @@ def train_apis_model(config, blackbox=None, bb_name=''):
         plt.ylabel('% Blackbox Bypass')
         plt.title(f'APIs Model Accuracy Dev ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'apis_' + bb_name + '_model_acc_dev.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -782,7 +782,7 @@ def train():
                     search_alg=hyperopt,
                     reuse_actors=True,
                     num_samples=500,
-
+                    trial_dirname_creator=custom_dirname_creator
                 ),
                 param_space=search_space
             )
@@ -802,7 +802,7 @@ def train():
             plt.ylabel("Mean Accuracy")
             plt.title(f'APIs Ray Tune Mean Accuracy ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
                              f'apis_' + bb_model['name'] + '_ray_mean_acc.png'),
                 bbox_inches='tight')
             plt.close('all')
@@ -813,7 +813,7 @@ def train():
             plt.ylabel("Generator Loss")
             plt.title(f'APIs Ray Tune Generator Loss ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
                              f'apis_' + bb_model['name'] + '_ray_gen_loss.png'),
                 bbox_inches='tight')
             plt.close('all')
@@ -824,11 +824,11 @@ def train():
             plt.ylabel("Discriminator Loss")
             plt.title(f'APIs Ray Tune Discriminator Loss ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
                              f'apis_' + bb_model['name'] + '_ray_disc_loss.png'),
                 bbox_inches='tight')
             plt.close('all')
-            with open(f'../config_apis_{bb_model["name"]}_malgan.json', 'w') as f:
+            with open(f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\config_apis_{bb_model["name"]}_malgan.json', 'w') as f:
                 json.dump(best_config, f)
         else:
             with open(f'../config_apis_{bb_model["name"]}_malgan.json', 'r') as f:
@@ -837,4 +837,10 @@ def train():
 
 
     print('Finished!')
+
+
+def custom_dirname_creator(trial):
+    # Create a custom directory name based on the trial
+    return f"trial_{trial.trial_id}"
+
 train()

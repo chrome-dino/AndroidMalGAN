@@ -30,7 +30,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 RAY_TUNE = True
 NUM_EPOCHS = 5000
-SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/'
+SAVED_MODEL_PATH = '../'
 
 
 class Classifier(nn.Module):
@@ -84,7 +84,7 @@ class Classifier2(nn.Module):
 
 
 def train_mlp(config, data_benign=None, data_malware=None, model=''):
-    os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
+    # os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
     classifier = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3'], 'l4': config['c_4']}
     discriminator = Classifier2(l2=classifier['l2'], l3=classifier['l3'], l4=classifier['l4'])
     learning_rate_disc = config['lr_disc']

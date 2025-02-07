@@ -116,10 +116,10 @@ def hybrid_ensemble_detector(bb_type='', input_file='', n_count=3):
 
 
 def ensemble_detector(model_type='', test_data=None):
-    blackboxes = [{'name': 'rf', 'path': f'../rf_{model_type}_model.pth'}, {'name': 'dt', 'path': f'../dt_{model_type}_model.pth'},
-     {'name': 'svm', 'path': f'../svm_{model_type}_model.pth'}, {'name': 'knn', 'path': f'../knn_{model_type}_model.pth'},
-     {'name': 'gnb', 'path': f'../gnb_{model_type}_model.pth'}, {'name': 'lr', 'path': f'../lr_{model_type}_model.pth'},
-     {'name': 'mlp', 'path': f'../opcode_{model_type}_mlp.pth'}]
+    blackboxes = [{'name': 'rf', 'path': f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\rf_{model_type}_model.pth'}, {'name': 'dt', 'path': f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\dt_{model_type}_model.pth'},
+     {'name': 'svm', 'path': f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\svm_{model_type}_model.pth'}, {'name': 'knn', 'path': f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\knn_{model_type}_model.pth'},
+     {'name': 'gnb', 'path': f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\gnb_{model_type}_model.pth'}, {'name': 'lr', 'path': f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\lr_{model_type}_model.pth'},
+     {'name': 'mlp', 'path': f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\{model_type}_mlp.pth'}]
 
     bb_models = []
 
@@ -133,8 +133,12 @@ def ensemble_detector(model_type='', test_data=None):
             blackbox = blackbox.to(DEVICE)
             blackbox.eval()
         else:
+
             blackbox = torch.load(bb['path'])
-            blackbox = blackbox.to(DEVICE_CPU)
+            if bb['name'] == 'rf' or bb['name'] == 'knn':
+                blackbox = blackbox.to(DEVICE_CPU)
+            else:
+                blackbox = blackbox.to(DEVICE)
         bb_models.append(blackbox)
 
     combined = []
