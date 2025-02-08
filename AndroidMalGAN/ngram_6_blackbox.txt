@@ -1,0 +1,72 @@
+DT Classification Report
+              precision    recall  f1-score   support
+
+           0       0.92      0.95      0.93       295
+           1       0.95      0.92      0.93       308
+
+    accuracy                           0.93       603
+   macro avg       0.93      0.93      0.93       603
+weighted avg       0.93      0.93      0.93       603
+
+DT Accuracy
+93.20066334991708
+KNN Classification Report
+              precision    recall  f1-score   support
+
+           0       0.93      0.97      0.95       295
+           1       0.97      0.93      0.95       308
+
+    accuracy                           0.95       603
+   macro avg       0.95      0.95      0.95       603
+weighted avg       0.95      0.95      0.95       603
+
+KNN Accuracy
+94.69320066334991
+RF Classification Report
+              precision    recall  f1-score   support
+
+           0       0.93      0.98      0.95       295
+           1       0.98      0.93      0.95       308
+
+    accuracy                           0.95       603
+   macro avg       0.95      0.95      0.95       603
+weighted avg       0.95      0.95      0.95       603
+
+RF Accuracy
+95.19071310116087
+SVM Classification Report
+              precision    recall  f1-score   support
+
+           0       0.94      0.96      0.95       295
+           1       0.96      0.94      0.95       308
+
+    accuracy                           0.95       603
+   macro avg       0.95      0.95      0.95       603
+weighted avg       0.95      0.95      0.95       603
+
+SVM Accuracy
+94.69320066334991
+GNB Classification Report
+              precision    recall  f1-score   support
+
+           0       0.90      0.73      0.81       295
+           1       0.78      0.92      0.85       308
+
+    accuracy                           0.83       603
+   macro avg       0.84      0.83      0.83       603
+weighted avg       0.84      0.83      0.83       603
+
+GNB Accuracy
+82.75290215588723
+LR Classification Report
+              precision    recall  f1-score   support
+
+           0       0.94      0.95      0.94       295
+           1       0.95      0.94      0.95       308
+
+    accuracy                           0.95       603
+   macro avg       0.95      0.95      0.95       603
+weighted avg       0.95      0.95      0.95       603
+
+LR Accuracy
+94.5273631840796
