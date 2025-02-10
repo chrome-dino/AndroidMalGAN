@@ -34,11 +34,6 @@ matplotlib_inline.backend_inline.set_matplotlib_formats('svg')
 configs = configparser.ConfigParser()
 configs.read("settings.ini")
 
-BB_MODELS = [{'name': 'rf', 'path': '../rf_hybrid_model.pth'}, {'name': 'dt', 'path': '../dt_hybrid_model.pth'},
-             {'name': 'svm', 'path': '../svm_hybrid_model.pth'}, {'name': 'knn', 'path': '../knn_hybrid_model.pth'},
-             {'name': 'gnb', 'path': '../gnb_hybrid_model.pth'}, {'name': 'lr', 'path': '../lr_hybrid_model.pth'},
-             {'name': 'mlp', 'path': '../mlp_hybrid_model.pth'}]
-
 # FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
 # LEARNING_RATE = 0.0002
 LEARNING_RATE = 0.001
@@ -49,7 +44,7 @@ L2_LAMBDA = 0.01
 BB_L2_LAMBDA = 0.01
 BATCH_SIZE = 150
 NOISE = 0
-N_COUNT = 3
+N_COUNT = 5
 TRAIN_BLACKBOX = True
 RAY_TUNE = True
 SPLIT_DATA = True
@@ -58,8 +53,8 @@ DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '../hybrid_5_'
 SAVED_BEST_MODEL_PATH = 'hybrid_malgan_best.pth'
 
-MALWARE_CSV = f'/home/dsu/Documents/AndroidMalGAN/malware_hybrid_5.csv'
-BENIGN_CSV = f'/home/dsu/Documents/AndroidMalGAN/benign_hybrid_5.csv'
+MALWARE_CSV = f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\malware_hybrid_5.csv'
+BENIGN_CSV = f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\benign_hybrid_5.csv'
 # BB_SAVED_MODEL_PATH = 'opcode_hybrid_blackbox.pth'
 
 os.environ['TUNE_DISABLE_STRICT_METRIC_CHECKING'] = '1'
@@ -142,6 +137,13 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
     disDecs_dev_ben = np.zeros((NUM_EPOCHS, 1))
     disDecs_dev_mal = np.zeros((NUM_EPOCHS, 1))
     bb_dev_gen_mal = np.zeros((NUM_EPOCHS, 1))
+
+    best_gen = None
+    best_acc = 0
+    best_gen_loss = 100
+    best_disc_loss = 100
+    best_epoch = 0
+
     LOGGER.info('Training Hybrid Model: ' + bb_name)
     print('Training Hybrid Model: ' + bb_name)
     for e in range(NUM_EPOCHS):
@@ -165,10 +167,10 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         # forward pass and loss for benign
         if bb_name == 'ensemble':
             results = ensemble_detector(model_type=f'hybrid_5', test_data=gen_malware)
-            results = np.array([[row[1]] for row in results])
+            results = np.array([[row[0]] for row in results])
             bb_mal_labels = torch.from_numpy(results).type(torch.float32).to(DEVICE)
             results = ensemble_detector(model_type=f'hybrid_5', test_data=benign)
-            results = np.array([[row[1]] for row in results])
+            results = np.array([[row[0]] for row in results])
             bb_benign_labels = torch.from_numpy(results).type(torch.float32).to(DEVICE)
             benign = benign.to(DEVICE)
         else:
@@ -306,7 +308,14 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
             metrics = dict(d_loss=disc_loss.item(), g_loss=gen_loss.item(), mean_accuracy=float(score),
                            training_iteration=e)
             ray.train.report(metrics)
-
+        else:
+            if float(score) >= best_acc and gen_loss.item() <= best_gen_loss and disc_loss.item() <= best_disc_loss:
+                if e > 4000:
+                    best_acc = float(score)
+                    best_gen_loss = gen_loss.item()
+                    best_disc_loss = disc_loss.item()
+                    best_gen = copy.deepcopy(generator)
+                    best_epoch = e
         if (e + 1) % 1000 == 0:
             # gen_loss, disc_loss = validation(generator, discriminator, test_data_malware, lossfun)
             # msg = f'Gen loss: {str(gen_loss)} / Disc loss: {str(disc_loss)}'
@@ -318,7 +327,10 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
     sys.stdout.write('\nHybrid 5 training finished!\n')
 
     if not RAY_TUNE:
-        torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
+        print(best_epoch)
+        print(best_gen_loss)
+        print(best_disc_loss)
+        torch.save(best_gen.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
         plt.figure(figsize=(10, 10))
         plt.plot(losses_gen)
         plt.xlabel('Epochs')
@@ -326,7 +338,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         plt.title(f'Hybrid 5 Model gen loss ({str(bb_name)})')
         # plt.legend(['Discrimator', 'Generator'])
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('results',
                          f'hybrid_5_' + bb_name + '_gen_loss.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -338,7 +350,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         plt.title(f'Hybrid 5 Model disc loss ({str(bb_name)})')
         # plt.legend(['Discrimator', 'Generator'])
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('results',
                          f'hybrid_5_' + bb_name + '_disc_loss.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -350,7 +362,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Generator loss')
         plt.title(f'Hybrid 5 Model Loss Mapping ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('results',
                          f'hybrid_5_' + bb_name + '_loss_map.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -361,7 +373,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'Hybrid 5 Discriminator Output Train Set Benign ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('results',
                          f'hybrid_5_' + bb_name + '_disc_train_ben.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -372,7 +384,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'Hybrid 5 Discriminator Output Train Set Malware ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('results',
                          f'hybrid_5_' + bb_name + '_disc_train_mal.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -383,7 +395,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'Hybrid 5 Discriminator Output Dev Set Benign ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('results',
                          f'hybrid_5_' + bb_name + '_disc_dev_ben.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -394,7 +406,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'Hybrid 5 Discriminator Output Dev Set Malware ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('results',
                          f'hybrid_5_' + bb_name + '_disc_dev_mal.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -405,7 +417,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'Hybrid 5 Discriminator Output Dev Set Gen Malware ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('results',
                          f'hybrid_5_' + bb_name + '_disc_dev_gen_mal.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -416,7 +428,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         plt.ylabel('% Blackbox Bypass')
         plt.title(f'Hybrid 5 Model Accuracy Dev ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('results',
                          f'hybrid_5_' + bb_name + '_model_acc_dev.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -533,7 +545,8 @@ class HybridGenerator(nn.Module):
 def validate(generator, blackbox, bb_name, data_malware, data_benign):
     generator.eval()
     generator.to(DEVICE)
-    blackbox.to(DEVICE_CPU)
+    if bb_name != 'ensemble':
+        blackbox.to(DEVICE_CPU)
     test_data_malware = data_malware.to(DEVICE)
     test_data_benign = data_benign.to(DEVICE_CPU)
     gen_malware = generator(test_data_malware)
@@ -546,9 +559,9 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
 
     if bb_name == 'ensemble':
         results = ensemble_detector(model_type=f'hybrid_5', test_data=test_data_malware)
-        results = np.array([[row[1]] for row in results])
+        results = np.array([[row[0]] for row in results])
         results_benign = ensemble_detector(model_type=f'hybrid_5', test_data=test_data_benign)
-        results_benign = np.array([[row[1]] for row in results_benign])
+        results_benign = np.array([[row[0]] for row in results_benign])
     else:
         if bb_name == 'mlp':
             results = blackbox(test_data_malware)
@@ -607,7 +620,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
 
     if bb_name == 'ensemble':
         results = ensemble_detector(model_type=f'hybrid_5', test_data=gen_malware)
-        results = np.array([[row[1]] for row in results])
+        results = np.array([[row[0]] for row in results])
     else:
         if bb_name == 'mlp':
             results = blackbox(gen_malware)
@@ -673,25 +686,26 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
     for bb_model in BB_MODELS:
         if bb_model['name'] == bb_name:
             continue
-        if bb_model['name'] != 'mlp':
-            bb = torch.load(bb_model['path'])
-            bb = bb.to(DEVICE_CPU)
-        elif bb_model['name'] == 'ensemble':
-            results = ensemble_detector(model_type=f'hybrid_5', test_data=gen_malware)
-            results = np.array([[row[1]] for row in results])
-        else:
-            # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
-            load_model = torch.load(bb_model['path'])
-            bb = Classifier2(d_input_dim=460, l1=len(load_model['input.weight']),
-                             l2=len(load_model['fc1.weight']),
-                             l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
-            bb.load_state_dict(load_model)
-            bb = bb.to(DEVICE_CPU)
-            bb.eval()
+        if bb_model['name'] != 'ensemble':
+            if bb_model['name'] != 'mlp':
+                bb = torch.load(bb_model['path'])
+                bb = bb.to(DEVICE_CPU)
+            else:
+                # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
+                load_model = torch.load(bb_model['path'])
+                bb = Classifier2(d_input_dim=460, l1=len(load_model['input.weight']),
+                                 l2=len(load_model['fc1.weight']),
+                                 l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
+                bb.load_state_dict(load_model)
+                bb = bb.to(DEVICE_CPU)
+                bb.eval()
 
         if bb_model['name'] == 'mlp':
             results = bb(gen_malware)
             results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
+        elif bb_model['name'] == 'ensemble':
+            results = ensemble_detector(model_type=f'hybrid_5', test_data=gen_malware)
+            results = np.array([[row[0]] for row in results])
         else:
             results = bb.predict_proba(gen_malware)
             if bb_model['name'] == 'knn':
@@ -743,7 +757,7 @@ def train():
                                        l2=len(load_model['fc1.weight']),
                                        l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
 
-                blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + 'mlp.pth'))
+                blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + 'mlp_model.pth'))
                 blackbox = blackbox.to(DEVICE)
                 blackbox.eval()
         if RAY_TUNE:
@@ -773,7 +787,7 @@ def train():
             )
             hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max")
             trainable_with_resource = tune.with_resources(
-                partial(train_hybrid_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": 6, "gpu": 1})
+                partial(train_hybrid_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": .25, "gpu": .1})
             tuner = tune.Tuner(
                 trainable_with_resource,
                 run_config=ray.train.RunConfig(
@@ -809,7 +823,7 @@ def train():
             plt.ylabel("Mean Accuracy")
             plt.title(f'Hybrid 5 Ray Tune Mean Accuracy ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                os.path.join('results',
                              f'hybrid_5_' + bb_model['name'] + '_ray_mean_acc.png'),
                 bbox_inches='tight')
             plt.close('all')
@@ -820,7 +834,7 @@ def train():
             plt.ylabel("Generator Loss")
             plt.title(f'Hybrid 5 Ray Tune Generator Loss ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                os.path.join('results',
                              f'hybrid_5_' + bb_model['name'] + '_ray_gen_loss.png'),
                 bbox_inches='tight')
             plt.close('all')
@@ -831,7 +845,7 @@ def train():
             plt.ylabel("Discriminator Loss")
             plt.title(f'Hybrid 5 Ray Tune Discriminator Loss ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/results',
+                os.path.join('results',
                              f'hybrid_5_' + bb_model['name'] + '_ray_disc_loss.png'),
                 bbox_inches='tight')
             plt.close('all')
@@ -843,8 +857,10 @@ def train():
                 train_hybrid_model(config, blackbox=blackbox, bb_name=bb_model['name'])
     print('Finished!')
 
+
 def custom_dirname_creator(trial):
     # Create a custom directory name based on the trial
     return f"trial_{trial.trial_id}"
+
 
 train()

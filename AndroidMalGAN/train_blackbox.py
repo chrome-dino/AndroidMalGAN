@@ -1,5 +1,6 @@
 import configparser
 import torch
+import copy
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -86,7 +87,7 @@ class Classifier2(nn.Module):
 def train_mlp(config, data_benign=None, data_malware=None, model=''):
     # os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
     classifier = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3'], 'l4': config['c_4']}
-    discriminator = Classifier2(l2=classifier['l2'], l3=classifier['l3'], l4=classifier['l4'])
+    discriminator = Classifier2(d_input_dim=460, l1=classifier['l1'], l2=classifier['l2'], l3=classifier['l3'], l4=classifier['l4'])
     learning_rate_disc = config['lr_disc']
     l2lambda_disc = config['l2_lambda_disc']
     lossfun = nn.BCELoss()
@@ -94,7 +95,9 @@ def train_mlp(config, data_benign=None, data_malware=None, model=''):
     disc_optimizer = torch.optim.Adam(discriminator.parameters(), lr=learning_rate_disc, weight_decay=l2lambda_disc,
                                       betas=(.9, .999))
     discriminator = discriminator.to(DEVICE)
-
+    best_disc = None
+    best_disc_loss = 100
+    best_epoch = 0
     for e in range(NUM_EPOCHS):
         mal_idx = np.random.randint(0, data_malware.shape[0], config['batch_size'])
         ben_idx = np.random.randint(0, data_benign.shape[0], config['batch_size'])
@@ -114,9 +117,14 @@ def train_mlp(config, data_benign=None, data_malware=None, model=''):
         disc_optimizer.zero_grad()
         disc_loss.backward()
         disc_optimizer.step()
+        if disc_loss.item() <= best_disc_loss:
+            best_disc_loss = disc_loss.item()
+            best_disc = copy.deepcopy(discriminator)
+            best_epoch = e
         # if RAY_TUNE:
         #     ray.train.report(dict(d_loss=disc_loss.item()))
-    torch.save(discriminator.state_dict(), SAVED_MODEL_PATH + model + '_mlp.pth')
+    print('mlp best epoch: ' + str(best_epoch))
+    torch.save(best_disc.state_dict(), SAVED_MODEL_PATH + model + '_mlp_model.pth')
     return
 
 
@@ -266,53 +274,6 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
     with open(output_file, 'a') as f:
         f.write(str(accuracy_score(yTest, yPredict)*100) + '\n')
 
-    # if RAY_TUNE:
-    #     tune_config = {
-    #         "c_1": tune.choice([500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000]),
-    #         "c_2": tune.choice([200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]),
-    #         "c_3": tune.choice([50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550]),
-    #         "lr_disc": tune.uniform(0.001, 0.1),
-    #         "l2_lambda_disc": tune.uniform(0.001, 0.1),
-    #         "batch_size": tune.choice([50, 100, 150, 200, 250, 300, 350]),
-    #     }
-    #
-    #     scheduler = ASHAScheduler(
-    #         metric="d_loss",
-    #         mode="min",
-    #         max_t=NUM_EPOCHS,
-    #         grace_period=60,
-    #         reduction_factor=2,
-    #     )
-    #     result = tune.run(
-    #         partial(train_mlp, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type),
-    #         config=tune_config,
-    #         num_samples=2500,
-    #         scheduler=scheduler,
-    #         resources_per_trial={"cpu": 4, "gpu": 1},
-    #     )
-    #     best_trial = result.get_best_trial("g_loss", "min", "last")
-    #     best_config_gen = result.get_best_config(metric="g_loss", mode="min")
-    #     best_config_disc = result.get_best_config(metric="d_loss", mode="min")
-    #     print(f"Best trial config: {best_trial.config}")
-    #     print(f"Best trial final loss: {best_trial.last_result['g_loss']}")
-    #     print(f"Best trial final accuracy: {best_trial.last_result['accuracy']}")
-    #
-    #     print("Best config gen:", best_config_gen)
-    #     print("Best config disc:", best_config_disc)
-    #
-    #     mlp_config = {
-    #         "c_1": best_config_disc['c_1'],
-    #         "c_2": best_config_disc['c_2'],
-    #         "c_3": best_config_disc['c_3'],
-    #         "lr_disc": best_config_disc['lr_disc'],
-    #         "l2_lambda_disc": best_config_disc['l2_lambda_disc'],
-    #         "batch_size": best_config_gen['batch_size'],
-    #     }
-    #
-    #     with open(f'config_{model_type}_mlp.json', 'w') as f:
-    #         json.dump(mlp_config, f)
-    #
-    # else:
     with open(f'../config_{model_type}_mlp.json', 'r') as f:
         mlp_config = json.load(f)
         train_mlp(mlp_config, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type)
@@ -539,8 +500,8 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
         f.write('Blackbox benign LR\n')
         f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
         f.write('Accuracy:' + str((ben/(mal+ben))*100) + '%\n')
-    load_model = torch.load(SAVED_MODEL_PATH + model_type + '_mlp.pth')
-    torch_mlp = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']), l2=len(load_model['fc1.weight']),
+    load_model = torch.load(SAVED_MODEL_PATH + model_type + '_mlp_model.pth')
+    torch_mlp = Classifier2(d_input_dim=460, l1=len(load_model['input.weight']), l2=len(load_model['fc1.weight']),
                      l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
     torch_mlp.load_state_dict(load_model)
     torch_mlp = torch_mlp.to(DEVICE)
