@@ -35,7 +35,11 @@ matplotlib_inline.backend_inline.set_matplotlib_formats('svg')
 configs = configparser.ConfigParser()
 configs.read("settings.ini")
 
-BB_MODELS = [{'name': 'ensemble', 'path': ''}]
+BB_MODELS = [{'name': 'rf', 'path': '../rf_intents_model.pth'}, {'name': 'dt', 'path': '../dt_intents_model.pth'},
+             {'name': 'svm', 'path': '../svm_intents_model.pth'}, {'name': 'knn', 'path': '../knn_intents_model.pth'},
+             {'name': 'gnb', 'path': '../gnb_intents_model.pth'}, {'name': 'lr', 'path': '../lr_intents_model.pth'},
+             {'name': 'mlp', 'path': '../intents_mlp_model.pth'}, {'name': 'ensemble', 'path': ''}]
+BB_MODELS2 = [{'name': 'ensemble', 'path': ''}]
 
 # FEATURE_COUNT = int(config.get('Features', 'TotalFeatureCount'))
 # LEARNING_RATE = 0.0002
@@ -48,15 +52,15 @@ BB_L2_LAMBDA = 0.01
 BATCH_SIZE = 150
 NOISE = 0
 TRAIN_BLACKBOX = False
-RAY_TUNE = True
+RAY_TUNE = False
 SPLIT_DATA = True
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '../intents_'
 SAVED_BEST_MODEL_PATH = 'intents_malgan_best.pth'
 
-MALWARE_CSV = 'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\malware_intents.csv'
-BENIGN_CSV = 'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\benign_intents.csv'
+MALWARE_CSV = '../malware_intents.csv'
+BENIGN_CSV = '../benign_intents.csv'
 # BB_SAVED_MODEL_PATH = 'opcode_ngram_blackbox.pth'
 
 os.environ['TUNE_DISABLE_STRICT_METRIC_CHECKING'] = '1'
@@ -134,6 +138,13 @@ def train_intents_model(config, blackbox=None, bb_name=''):
     disDecs_dev_ben = np.zeros((NUM_EPOCHS, 1))
     disDecs_dev_mal = np.zeros((NUM_EPOCHS, 1))
     bb_dev_gen_mal = np.zeros((NUM_EPOCHS, 1))
+
+    best_gen = None
+    best_acc = 0
+    best_gen_loss = 100
+    best_disc_loss = 100
+    best_epoch = 0
+
     LOGGER.info('Training Intent Model: ' + bb_name)
     print('Training Intent Model: ' + bb_name)
     for e in range(NUM_EPOCHS):
@@ -141,7 +152,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         mal_idx = np.random.randint(0, train_data_malware.shape[0], config['batch_size'])
         ben_idx = np.random.randint(0, train_data_benign.shape[0], config['batch_size'])
         malware = train_data_malware[mal_idx]
-        benign = train_data_malware[ben_idx]
+        benign = train_data_benign[ben_idx]
 
         malware = malware.to(DEVICE)
         # generator.eval()
@@ -303,6 +314,22 @@ def train_intents_model(config, blackbox=None, bb_name=''):
             metrics = dict(d_loss=disc_loss.item(), g_loss=gen_loss.item(), mean_accuracy=float(score),
                            training_iteration=e)
             ray.train.report(metrics)
+        else:
+            if float(score) >= best_acc:
+                best_gen_loss = gen_loss.item()
+                best_disc_loss = disc_loss.item()
+                best_acc = float(score)
+                best_gen = copy.deepcopy(generator)
+                best_epoch = e
+            if e > 500:
+                if gen_loss.item() < .2 and disc_loss.item() < .2 and float(score) >= 0.95:
+                    best_gen = copy.deepcopy(generator)
+                    print('\nEarly exit at epoch: ' + str(e))
+                    break
+                if best_acc >= 0.95 and best_gen_loss < .2 and best_disc_loss < .2:
+                    best_gen = copy.deepcopy(generator)
+                    print('\nEarly exit at epoch: ' + str(e))
+                    break
 
         if (e + 1) % 1000 == 0:
             # gen_loss, disc_loss = validation(generator, discriminator, test_data_malware, lossfun)
@@ -315,7 +342,11 @@ def train_intents_model(config, blackbox=None, bb_name=''):
     sys.stdout.write('\nIntents training finished!\n')
 
     if not RAY_TUNE:
-        torch.save(generator.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
+        print(best_epoch)
+        print(best_gen_loss)
+        print(best_disc_loss)
+        generator = best_gen
+        torch.save(best_gen.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
         plt.figure(figsize=(10, 10))
         plt.plot(losses_gen)
         plt.xlabel('Epochs')
@@ -323,7 +354,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         plt.title(f'Intents Model gen loss ({str(bb_name)})')
         # plt.legend(['Discrimator', 'Generator'])
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'intents_' + bb_name + '_gen_loss.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -335,7 +366,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         plt.title(f'Intents Model disc loss ({str(bb_name)})')
         # plt.legend(['Discrimator', 'Generator'])
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'intents_' + bb_name + '_disc_loss.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -347,7 +378,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Generator loss')
         plt.title(f'Intents Model Loss Mapping ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'intents_' + bb_name + '_loss_map.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -358,7 +389,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'Intents Discriminator Output Train Set Benign ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'intents_' + bb_name + '_disc_train_ben.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -369,7 +400,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'Intents Discriminator Output Train Set Malware ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'intents_' + bb_name + '_disc_train_mal.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -380,7 +411,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'Intents Discriminator Output Dev Set Benign ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'intents_' + bb_name + '_disc_dev_ben.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -391,7 +422,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'Intents Discriminator Output Dev Set Malware ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'intents_' + bb_name + '_disc_dev_mal.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -402,7 +433,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         plt.ylabel('Probablity Malicious')
         plt.title(f'Intents Discriminator Output Dev Set Gen Malware ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'intents_' + bb_name + '_disc_dev_gen_mal.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -413,7 +444,7 @@ def train_intents_model(config, blackbox=None, bb_name=''):
         plt.ylabel('% Blackbox Bypass')
         plt.title(f'Intents Model Accuracy Dev ({str(bb_name)})')
         plt.savefig(
-            os.path.join('/home/dsu/Documents/AndroidMalGAN/results',
+            os.path.join('../AndroidMalGAN/results',
                          f'intents_' + bb_name + '_model_acc_dev.png'),
             bbox_inches='tight')
         plt.close('all')
@@ -530,7 +561,8 @@ class IntentsGenerator(nn.Module):
 def validate(generator, blackbox, bb_name, data_malware, data_benign):
     generator.eval()
     generator.to(DEVICE)
-    blackbox.to(DEVICE_CPU)
+    if bb_name != 'ensemble':
+        blackbox.to(DEVICE_CPU)
     test_data_malware = data_malware.to(DEVICE)
     test_data_benign = data_benign.to(DEVICE_CPU)
     gen_malware = generator(test_data_malware)
@@ -543,9 +575,9 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
 
     if bb_name == 'ensemble':
         results = ensemble_detector(model_type=f'intents', test_data=test_data_malware)
-        results = np.array([[row[1]] for row in results])
+        results = np.array([[row[0]] for row in results])
         results_benign = ensemble_detector(model_type=f'intents', test_data=test_data_benign)
-        results_benign = np.array([[row[1]] for row in results_benign])
+        results_benign = np.array([[row[0]] for row in results_benign])
     else:
         if bb_name == 'mlp':
             results = blackbox(test_data_malware)
@@ -604,7 +636,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
 
     if bb_name == 'ensemble':
         results = ensemble_detector(model_type=f'intents', test_data=gen_malware)
-        results = np.array([[row[1]] for row in results])
+        results = np.array([[row[0]] for row in results])
     else:
         if bb_name == 'mlp':
             results = blackbox(gen_malware)
@@ -670,25 +702,26 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
     for bb_model in BB_MODELS:
         if bb_model['name'] == bb_name:
             continue
-        if bb_model['name'] != 'mlp':
-            bb = torch.load(bb_model['path'])
-            bb = bb.to(DEVICE_CPU)
-        elif bb_model['name'] == 'ensemble':
-            results = ensemble_detector(model_type=f'intents', test_data=gen_malware)
-            results = np.array([[row[1]] for row in results])
-        else:
-            # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
-            load_model = torch.load(bb_model['path'])
-            bb = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
-                             l2=len(load_model['fc1.weight']),
-                             l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
-            bb.load_state_dict(load_model)
-            bb = bb.to(DEVICE_CPU)
-            bb.eval()
+        if bb_model['name'] != 'ensemble':
+            if bb_model['name'] != 'mlp':
+                bb = torch.load(bb_model['path'])
+                bb = bb.to(DEVICE_CPU)
+            else:
+                # {'name': 'mlp', 'path': 'mlp_ngram_model.pth'}
+                load_model = torch.load(bb_model['path'])
+                bb = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+                                 l2=len(load_model['fc1.weight']),
+                                 l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
+                bb.load_state_dict(load_model)
+                bb = bb.to(DEVICE_CPU)
+                bb.eval()
 
         if bb_model['name'] == 'mlp':
             results = bb(gen_malware)
             results = [[0.0, 1.0] if result[0] > 0.5 else [1.0, 0.0] for result in results]
+        elif bb_model['name'] == 'ensemble':
+            results = ensemble_detector(model_type=f'intents', test_data=gen_malware)
+            results = np.array([[row[0]] for row in results])
         else:
             results = bb.predict_proba(gen_malware)
             if bb_model['name'] == 'knn':
@@ -725,7 +758,7 @@ def train():
     LOGGER.info('#######################################################################################################')
     LOGGER.info(f'Starting training for intents MalGAN')
     LOGGER.info('#######################################################################################################')
-    for bb_model in BB_MODELS:
+    for bb_model in BB_MODELS2:
         if bb_model['name'] == 'ensemble':
             blackbox = None
         else:
@@ -738,7 +771,7 @@ def train():
                                        l2=len(load_model['fc1.weight']),
                                        l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
     
-                blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + 'mlp.pth'))
+                blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + 'mlp_model.pth'))
                 blackbox = blackbox.to(DEVICE)
                 blackbox.eval()
         if RAY_TUNE:
@@ -762,13 +795,13 @@ def train():
                 metric='mean_accuracy',
                 mode='max',
                 max_t=1000,
-                grace_period=10,
+                grace_period=100,
                 reduction_factor=3,
                 brackets=1,
             )
             hyperopt = HyperOptSearch(metric="mean_accuracy", mode="max")
             trainable_with_resource = tune.with_resources(
-                partial(train_intents_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": .25, "gpu": .25})
+                partial(train_intents_model, blackbox=blackbox, bb_name=bb_model['name']), {"cpu": .5, "gpu": .1})
             tuner = tune.Tuner(
                 trainable_with_resource,
                 run_config=ray.train.RunConfig(
@@ -783,7 +816,7 @@ def train():
                     scheduler=scheduler,
                     search_alg=hyperopt,
                     reuse_actors=True,
-                    num_samples=250,
+                    num_samples=100,
                     trial_dirname_creator=custom_dirname_creator
                 ),
                 param_space=search_space
@@ -804,7 +837,7 @@ def train():
             plt.ylabel("Mean Accuracy")
             plt.title(f'Intents Ray Tune Mean Accuracy ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
+                os.path.join('results',
                              f'intents_' + bb_model['name'] + '_ray_mean_acc.png'),
                 bbox_inches='tight')
             plt.close('all')
@@ -815,7 +848,7 @@ def train():
             plt.ylabel("Generator Loss")
             plt.title(f'Intents Ray Tune Generator Loss ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
+                os.path.join('results',
                              f'intents_' + bb_model['name'] + '_ray_gen_loss.png'),
                 bbox_inches='tight')
             plt.close('all')
@@ -826,11 +859,11 @@ def train():
             plt.ylabel("Discriminator Loss")
             plt.title(f'Intents Ray Tune Discriminator Loss ({str(bb_model["name"])})')
             plt.savefig(
-                os.path.join('C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\AndroidMalGAN\\results',
+                os.path.join('results',
                              f'intents_' + bb_model['name'] + '_ray_disc_loss.png'),
                 bbox_inches='tight')
             plt.close('all')
-            with open(f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\config_intents_{bb_model["name"]}_malgan.json', 'w') as f:
+            with open(f'../config_intents_{bb_model["name"]}_malgan.json', 'w') as f:
                 json.dump(best_config, f)
         else:
             with open(f'../config_intents_{bb_model["name"]}_malgan.json', 'r') as f:
@@ -842,4 +875,77 @@ def custom_dirname_creator(trial):
     # Create a custom directory name based on the trial
     return f"trial_{trial.trial_id}"
 
-train()
+
+
+def test():
+    data_malware = np.loadtxt(MALWARE_CSV, delimiter=',', skiprows=1)
+    # data_malware = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
+    data_malware = (data_malware.astype(np.bool_)).astype(float)
+
+    data_benign = np.loadtxt(BENIGN_CSV, delimiter=',', skiprows=1)
+    data_benign = (data_benign.astype(np.bool_)).astype(float)
+    labels_benign = data_benign[:, 0]
+    data_benign = data_benign[:, 1:]
+
+    labels_malware = data_malware[:, 0]
+
+    data_malware = data_malware[:, 1:]
+
+    data_malware = np.array(data_malware)
+    data_benign = np.array(data_benign)
+    # convert to tensor
+    data_tensor_benign = torch.tensor(data_benign).float()
+    data_tensor_malware = torch.tensor(data_malware).float()
+    partition = [.8, .1, .1]
+    # partition = [.8, .2]
+    # use scikitlearn to split the data
+    if SPLIT_DATA:
+        data_tensor_benign, test_data_benign, labels_benign, test_labels_benign = train_test_split(
+            data_tensor_benign, labels_benign, test_size=0.4, random_state=42)
+        data_tensor_malware, test_data_malware, labels_malware, test_labels_malware = train_test_split(
+            data_tensor_malware, labels_malware, test_size=0.4, random_state=42)
+    train_data_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
+        data_tensor_benign, labels_benign, test_size=partition[1], random_state=42)
+    dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_benign,
+                                                                                                test_labels_benign,
+                                                                                                test_size=partition[
+                                                                                                              1] / (
+                                                                                                                  partition[
+                                                                                                                      1] +
+                                                                                                                  partition[
+                                                                                                                      2]),
+                                                                                                random_state=42)
+
+    train_data_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
+        data_tensor_malware, labels_malware, test_size=partition[1], random_state=42)
+    dev_data_malware, test_data_malware, dev_labels_malware, test_labels_malware = train_test_split(
+        test_data_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]), random_state=42)
+
+    for bb_model in BB_MODELS:
+        if bb_model['name'] == 'ensemble':
+            blackbox = None
+        else:
+            if bb_model['name'] != 'mlp':
+                blackbox = torch.load(bb_model['path'])
+                blackbox = blackbox.to(DEVICE)
+            else:
+                load_model = torch.load(bb_model['path'])
+                blackbox = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+                                       l2=len(load_model['fc1.weight']),
+                                       l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
+
+                blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + 'mlp_model.pth'))
+                blackbox = blackbox.to(DEVICE)
+                blackbox.eval()
+        with open(f'../config_intents_{bb_model["name"]}_malgan.json') as f:
+            g = json.load(f)
+            print(bb_model['name'])
+        generator = IntentsGenerator(noise_dims=g['g_noise'], input_layers=350, l2=g['g_1'], l3=g['g_2'],
+                                         l4=g['g_3'])
+        generator.load_state_dict(torch.load(SAVED_MODEL_PATH + bb_model['name'] + '.pth', weights_only=True))
+        generator.eval()
+        validate(generator, blackbox, bb_model['name'], test_data_malware, test_data_benign)
+        validate_ensemble(generator, bb_model['name'], 'intents', test_data_malware, test_data_benign)
+
+# train()
+test()

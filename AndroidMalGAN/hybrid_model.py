@@ -9,8 +9,8 @@ import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve
 from train_blackbox import train_blackbox, Classifier2
-from ensemble_blackbox import validate_ensemble
-from ensemble_blackbox import ensemble_detector
+from ensemble_blackbox_hybrid import validate_ensemble
+from ensemble_blackbox_hybrid import ensemble_detector
 from sklearn.preprocessing import RobustScaler, MinMaxScaler
 
 from ray import train, tune
@@ -45,41 +45,45 @@ BB_L2_LAMBDA = 0.01
 BATCH_SIZE = 150
 NOISE = 0
 N_COUNT = 5
-TRAIN_BLACKBOX = True
-RAY_TUNE = True
+TRAIN_BLACKBOX = False
+RAY_TUNE = False
 SPLIT_DATA = True
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 DEVICE_CPU = torch.device('cpu')
 SAVED_MODEL_PATH = '../hybrid_5_'
 SAVED_BEST_MODEL_PATH = 'hybrid_malgan_best.pth'
 
-MALWARE_CSV = f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\malware_hybrid_5.csv'
-BENIGN_CSV = f'C:\\Users\\khara\\PycharmProjects\\AndroidMalGAN\\benign_hybrid_5.csv'
+MALWARE_CSV = f'../malware_hybrid_5.csv'
+BENIGN_CSV = f'../benign_hybrid_5.csv'
 # BB_SAVED_MODEL_PATH = 'opcode_hybrid_blackbox.pth'
 
 os.environ['TUNE_DISABLE_STRICT_METRIC_CHECKING'] = '1'
 
-BB_MODELS = [{'name': 'rf', 'path': '../rf_hybrid_5_model.pth'}, {'name': 'dt', 'path': '../dt_hybrid_5_model.pth'},
-             {'name': 'svm', 'path': '../svm_hybrid_5_model.pth'}, {'name': 'knn', 'path': '../knn_hybrid_5_model.pth'},
-             {'name': 'gnb', 'path': '../gnb_hybrid_5_model.pth'}, {'name': 'lr', 'path': '../lr_hybrid_5_model.pth'},
-             {'name': 'mlp', 'path': '../hybrid_5_mlp.pth'}, {'name': 'ensemble', 'path': ''}]
+BB_MODELS = [ {'name': 'dt', 'path': '../dt_hybrid_5_model.pth'}, {'name': 'svm', 'path': '../svm_hybrid_5_model.pth'},
+             {'name': 'gnb', 'path': '../gnb_hybrid_5_model.pth'}, {'name': 'lr', 'path': '../lr_hybrid_5_model.pth'}, {'name': 'rf', 'path': '../rf_hybrid_5_model.pth'},
+             {'name': 'knn', 'path': '../knn_hybrid_5_model.pth'}, {'name': 'mlp', 'path': '../hybrid_5_mlp_model.pth'}, {'name': 'ensemble', 'path': ''}]
+BB_MODELS2 = [{'name': 'ensemble', 'path': ''}]
 def train_hybrid_model(config, blackbox=None, bb_name=''):
-    # num_epochs = 10000, batch_size = 150, learning_rate = 0.001, l2_lambda = 0.01, g_noise = 0, g_input = 0, g_1 = 0, g_2 = 0, g_3 = 0, c_input = 0, c_1 = 0, c_2 = 0, c_3 = 0
-    # os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
-    # with open('malware_hybrid.csv') as f:
+    classifier_params = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
+    generator_params = {'l1': config['g_1'], 'l2': config['g_2'], 'l3': config['g_3'], 'noise': config['g_noise']}
+    discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_hybrid_model(config['lr_gen'],
+                                                                                                config[
+                                                                                                    'l2_lambda_gen'],
+                                                                                                config['lr_disc'],
+                                                                                                config[
+                                                                                                    'l2_lambda_disc'],
+                                                                                                classifier_params,
+                                                                                                generator_params, input_size=460)
+    discriminator = discriminator.to(DEVICE)
+    generator = generator.to(DEVICE)
+    # with open('malware_ngram.csv') as f:
     #     ncols = len(f.readline().split(','))
     data_malware = np.loadtxt(MALWARE_CSV, delimiter=',', skiprows=1)
-    # data_malware = np.loadtxt('malware_hybrid.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
+    # data_malware = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
     data_malware = (data_malware.astype(np.bool_)).astype(float)
 
-    # data_malware_gen = np.loadtxt('malware_hybrid.csv', delimiter=',', skiprows=1, usecols=range(0, 151))
-    # with open('benign_hybrid.csv') as f:
-    #     ncols = len(f.readline().split(','))
     data_benign = np.loadtxt(BENIGN_CSV, delimiter=',', skiprows=1)
     data_benign = (data_benign.astype(np.bool_)).astype(float)
-
-    input_size = len(data_benign)
-    
     labels_benign = data_benign[:, 0]
     data_benign = data_benign[:, 1:]
 
@@ -93,40 +97,32 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
     data_tensor_benign = torch.tensor(data_benign).float()
     data_tensor_malware = torch.tensor(data_malware).float()
     partition = [.8, .1, .1]
-
-    classifier_params = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3']}
-    generator_params = {'l1': config['g_1'], 'l2': config['g_2'], 'l3': config['g_3'], 'noise': config['g_noise']}
-    discriminator, generator, lossfun, disc_optimizer, gen_optimizer = create_hybrid_model(config['lr_gen'],
-                                                                                           config[
-                                                                                               'l2_lambda_gen'],
-                                                                                           config['lr_disc'],
-                                                                                           config[
-                                                                                               'l2_lambda_disc'],
-                                                                                           classifier_params,
-                                                                                           generator_params,
-                                                                                           input_size)
-    discriminator = discriminator.to(DEVICE)
-    generator = generator.to(DEVICE)
-    
     # partition = [.8, .2]
     # use scikitlearn to split the data
     if SPLIT_DATA:
-        data_tensor_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
+        data_tensor_benign, test_data_benign, labels_benign, test_labels_benign = train_test_split(
             data_tensor_benign, labels_benign, test_size=0.4, random_state=42)
-        data_tensor_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
+        data_tensor_malware, test_data_malware, labels_malware, test_labels_malware = train_test_split(
             data_tensor_malware, labels_malware, test_size=0.4, random_state=42)
     train_data_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
         data_tensor_benign, labels_benign, test_size=partition[1], random_state=42)
     dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_benign,
-        test_labels_benign, test_size=partition[1]/(partition[1] + partition[2]), random_state=42)
+                                                                                                test_labels_benign,
+                                                                                                test_size=partition[
+                                                                                                              1] / (
+                                                                                                                      partition[
+                                                                                                                          1] +
+                                                                                                                      partition[
+                                                                                                                          2]),
+                                                                                                random_state=42)
 
     train_data_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
         data_tensor_malware, labels_malware, test_size=partition[1], random_state=42)
     dev_data_malware, test_data_malware, dev_labels_malware, test_labels_malware = train_test_split(
         test_data_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]), random_state=42)
 
-    last_loss = float('inf')
-    early_stoppage_counter = 0
+    # last_loss = float('inf')
+    # early_stoppage_counter = 0
 
     losses_disc = torch.zeros((NUM_EPOCHS, 1))
     losses_gen = torch.zeros((NUM_EPOCHS, 1))
@@ -151,7 +147,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         mal_idx = np.random.randint(0, train_data_malware.shape[0], config['batch_size'])
         ben_idx = np.random.randint(0, train_data_benign.shape[0], config['batch_size'])
         malware = train_data_malware[mal_idx]
-        benign = train_data_malware[ben_idx]
+        benign = train_data_benign[ben_idx]
 
         malware = malware.to(DEVICE)
         # generator.eval()
@@ -167,10 +163,10 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         # forward pass and loss for benign
         if bb_name == 'ensemble':
             results = ensemble_detector(model_type=f'hybrid_5', test_data=gen_malware)
-            results = np.array([[row[0]] for row in results])
+            results = np.array([[row[1]] for row in results])
             bb_mal_labels = torch.from_numpy(results).type(torch.float32).to(DEVICE)
             results = ensemble_detector(model_type=f'hybrid_5', test_data=benign)
-            results = np.array([[row[0]] for row in results])
+            results = np.array([[row[1]] for row in results])
             bb_benign_labels = torch.from_numpy(results).type(torch.float32).to(DEVICE)
             benign = benign.to(DEVICE)
         else:
@@ -309,13 +305,21 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
                            training_iteration=e)
             ray.train.report(metrics)
         else:
-            if float(score) >= best_acc and gen_loss.item() <= best_gen_loss and disc_loss.item() <= best_disc_loss:
-                if e > 4000:
-                    best_acc = float(score)
-                    best_gen_loss = gen_loss.item()
-                    best_disc_loss = disc_loss.item()
+            if float(score) >= best_acc:
+                best_gen_loss = gen_loss.item()
+                best_disc_loss = disc_loss.item()
+                best_acc = float(score)
+                best_gen = copy.deepcopy(generator)
+                best_epoch = e
+            if e > 500:
+                if gen_loss.item() < .3 and disc_loss.item() < .3 and float(score) >= 0.925:
                     best_gen = copy.deepcopy(generator)
-                    best_epoch = e
+                    print('\nEarly exit at epoch: ' + str(e))
+                    break
+                if best_acc >= 0.925 and best_gen_loss < .3 and best_disc_loss < .3:
+                    best_gen = copy.deepcopy(generator)
+                    print('\nEarly exit at epoch: ' + str(e))
+                    break
         if (e + 1) % 1000 == 0:
             # gen_loss, disc_loss = validation(generator, discriminator, test_data_malware, lossfun)
             # msg = f'Gen loss: {str(gen_loss)} / Disc loss: {str(disc_loss)}'
@@ -330,6 +334,7 @@ def train_hybrid_model(config, blackbox=None, bb_name=''):
         print(best_epoch)
         print(best_gen_loss)
         print(best_disc_loss)
+        generator = best_gen
         torch.save(best_gen.state_dict(), SAVED_MODEL_PATH + bb_name + '.pth')
         plt.figure(figsize=(10, 10))
         plt.plot(losses_gen)
@@ -744,7 +749,7 @@ def train():
     LOGGER.info(f'Starting training for hybrid_5 MalGAN')
     LOGGER.info(
         '#######################################################################################################')
-    for bb_model in BB_MODELS:
+    for bb_model in BB_MODELS2:
         if bb_model['name'] == 'ensemble':
             blackbox = None
         else:
@@ -781,7 +786,7 @@ def train():
                 metric='mean_accuracy',
                 mode='max',
                 max_t=1000,
-                grace_period=10,
+                grace_period=100,
                 reduction_factor=3,
                 brackets=1,
             )
@@ -802,7 +807,7 @@ def train():
                     scheduler=scheduler,
                     search_alg=hyperopt,
                     reuse_actors=True,
-                    num_samples=250,
+                    num_samples=100,
                     trial_dirname_creator=custom_dirname_creator
                 ),
                 param_space=search_space
@@ -863,4 +868,76 @@ def custom_dirname_creator(trial):
     return f"trial_{trial.trial_id}"
 
 
-train()
+def test():
+    data_malware = np.loadtxt(MALWARE_CSV, delimiter=',', skiprows=1)
+    # data_malware = np.loadtxt('malware_ngram.csv', delimiter=',', skiprows=1, usecols=range(0, 301))
+    data_malware = (data_malware.astype(np.bool_)).astype(float)
+
+    data_benign = np.loadtxt(BENIGN_CSV, delimiter=',', skiprows=1)
+    data_benign = (data_benign.astype(np.bool_)).astype(float)
+    labels_benign = data_benign[:, 0]
+    data_benign = data_benign[:, 1:]
+
+    labels_malware = data_malware[:, 0]
+
+    data_malware = data_malware[:, 1:]
+
+    data_malware = np.array(data_malware)
+    data_benign = np.array(data_benign)
+    # convert to tensor
+    data_tensor_benign = torch.tensor(data_benign).float()
+    data_tensor_malware = torch.tensor(data_malware).float()
+    partition = [.8, .1, .1]
+    # partition = [.8, .2]
+    # use scikitlearn to split the data
+    if SPLIT_DATA:
+        data_tensor_benign, test_data_benign, labels_benign, test_labels_benign = train_test_split(
+            data_tensor_benign, labels_benign, test_size=0.4, random_state=42)
+        data_tensor_malware, test_data_malware, labels_malware, test_labels_malware = train_test_split(
+            data_tensor_malware, labels_malware, test_size=0.4, random_state=42)
+    train_data_benign, test_data_benign, train_labels_benign, test_labels_benign = train_test_split(
+        data_tensor_benign, labels_benign, test_size=partition[1], random_state=42)
+    dev_data_benign, test_data_benign, dev_labels_benign, test_labels_benign = train_test_split(test_data_benign,
+                                                                                                test_labels_benign,
+                                                                                                test_size=partition[
+                                                                                                              1] / (
+                                                                                                                  partition[
+                                                                                                                      1] +
+                                                                                                                  partition[
+                                                                                                                      2]),
+                                                                                                random_state=42)
+
+    train_data_malware, test_data_malware, train_labels_malware, test_labels_malware = train_test_split(
+        data_tensor_malware, labels_malware, test_size=partition[1], random_state=42)
+    dev_data_malware, test_data_malware, dev_labels_malware, test_labels_malware = train_test_split(
+        test_data_malware, test_labels_malware, test_size=partition[1] / (partition[1] + partition[2]), random_state=42)
+
+    for bb_model in BB_MODELS:
+        if bb_model['name'] == 'ensemble':
+            blackbox = None
+        else:
+            if bb_model['name'] != 'mlp':
+                blackbox = torch.load(bb_model['path'])
+                blackbox = blackbox.to(DEVICE)
+            else:
+                load_model = torch.load(bb_model['path'])
+                blackbox = Classifier2(d_input_dim=460, l1=len(load_model['input.weight']),
+                                       l2=len(load_model['fc1.weight']),
+                                       l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
+
+                blackbox.load_state_dict(torch.load(SAVED_MODEL_PATH + 'mlp_model.pth'))
+                blackbox = blackbox.to(DEVICE)
+                blackbox.eval()
+        with open(f'../config_hybrid_5_{bb_model["name"]}_malgan.json') as f:
+            g = json.load(f)
+            print(bb_model['name'])
+        generator = HybridGenerator(noise_dims=g['g_noise'], input_layers=460, l2=g['g_1'], l3=g['g_2'],
+                                         l4=g['g_3'])
+        generator.load_state_dict(torch.load(SAVED_MODEL_PATH + bb_model['name'] + '.pth', weights_only=True))
+        generator.eval()
+        validate(generator, blackbox, bb_model['name'], test_data_malware, test_data_benign)
+        validate_ensemble(generator, bb_model['name'], 'hybrid_5', test_data_malware, test_data_benign)
+
+
+# train()
+test()

@@ -16,7 +16,7 @@ SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/'
 
 def load_mlp(path):
     load_model = torch.load(path)
-    bb = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+    bb = Classifier2(d_input_dim=460, l1=len(load_model['input.weight']),
                      l2=len(load_model['fc1.weight']),
                      l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
     bb.load_state_dict(load_model)
@@ -126,7 +126,7 @@ def ensemble_detector(model_type='', test_data=None):
     for bb in blackboxes:
         if bb['name'] == 'mlp':
             load_model = torch.load(bb['path'])
-            blackbox = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+            blackbox = Classifier2(d_input_dim=460, l1=len(load_model['input.weight']),
                                    l2=len(load_model['fc1.weight']),
                                    l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
             blackbox.load_state_dict(load_model)
