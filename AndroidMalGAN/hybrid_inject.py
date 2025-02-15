@@ -5,6 +5,7 @@ from hybrid_feature_extract import labeled_hybrid_data
 from hybrid_model import HybridGenerator
 import torch
 import xml.etree.ElementTree as ET
+import json
 
 SAVED_MODEL_PATH = '../hybrid_'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -37,31 +38,27 @@ def ngram_to_opcode(ngram):
 
 def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     os.system('rm -rf temp_file_dir/*')
-    hybrid_generator = HybridGenerator()
-    hybrid_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth')).to(DEVICE)
+
+    with open(f'../config_hybrid_{str(n_count)}_{blackbox}_malgan.json') as f:
+        g = json.load(f)
+    hybrid_generator = HybridGenerator(noise_dims=g['g_noise'], input_layers=460, l2=g['g_1'], l3=g['g_2'], l4=g['g_3'])
+    hybrid_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + f'_{str(n_count)}.pth', weights_only=True))
+    hybrid_generator = hybrid_generator.to(DEVICE)
     hybrid_generator.eval()
 
     filename = os.path.basename(input_file).split('.', -1)[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
-    command = f'apktool d -f {input_file} -o temp_file_dir'
+    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
 
-    data_malware = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
-    # df = pd.DataFrame(data_malware)
-    # df.to_csv('temp_file_dir/malware_ngram.csv')
-    # data_malware = np.loadtxt('temp_file_dir/malware_ngram.csv', delimiter=',')
-    # print(data_malware)
-    # labels_malware = data_malware[:, 0]
-    # data_malware = data_malware[:, 1:]
-    labels_malware = list(data_malware[0].keys())
-    del labels_malware[-1]
-    data_malware = [data_malware[0][k] for k in labels_malware]
-    # dataNorm_malware = data_malware / np.max(data_malware)
-    # dataNorm_malware = 2 * dataNorm_malware - 1
-    # convert to tensor
-    data_tensor_malware = torch.tensor(data_malware).float()
+    data_malware = labeled_hybrid_data(root_dir='temp_file_dir', n_count=n_count, single_file=True)
 
+    labels_malware = list(data_malware[0].keys())
+    data_malware = [data_malware[0][k] for k in labels_malware]
+
+    data_tensor_malware = torch.tensor(data_malware).float()
+    data_tensor_malware = data_tensor_malware.to(DEVICE)
     # noise = torch.as_tensor(np.random.uniform(0, 1, (1, ngram_generator.noise_dims)))
     # malware_noise = torch.cat((data_tensor_malware, noise), 1)
     # data_tensor_malware = data_tensor_malware.to(DEVICE)
@@ -73,7 +70,7 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     for i in range(len(data_tensor_malware)):
         diff = gen_malware - data_tensor_malware[i]
         final[labels_malware[i]] = diff
-    print(final)
+
     smali_inject = ''
     function_start = '''.method private throw2()V
         .locals 3
@@ -120,7 +117,7 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     for api in final:
         if api in api_features:
             smali_inject += function_start
-            smali_inject += 'invoke-virtual {}, ' + api + '\n'
+            smali_inject += 'invoke-virtual {}, ' + api + '(Landroid/app/Activity;Landroid/content/Intent;ILandroid/os/Bundle;)V\n'
             smali_inject += function_end
 
     smali_dir = f'temp_file_dir/{filename}/smali'
@@ -137,14 +134,15 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     with open(inject_file, 'a') as file:
         file.write(smali_inject)
 
+    manifest = os.path.join('temp_file_dir', filename, 'AndroidManifest.xml')
     for permission in final:
         if permission in permissions:
-            namespaces = dict([node for _, node in ET.iterparse('AndroidManifest.xml', events=['start-ns'])])
+            namespaces = dict([node for _, node in ET.iterparse(manifest, events=['start-ns'])])
             for namespace in namespaces.keys():
                 ET.register_namespace(namespace, namespaces[namespace])
 
             # Parse the XML file
-            tree = ET.parse('AndroidManifest.xml')
+            tree = ET.parse(manifest)
             root = tree.getroot()
 
             # Add a new element
@@ -152,16 +150,16 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
             new_element.set('android:name', permission)
             root.append(new_element)
             # Write the modified XML back to the file
-            tree.write('AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
+            tree.write(manifest, encoding='utf-8', xml_declaration=True)
 
     for intent in final:
         if intent in intent_features:
-            namespaces = dict([node for _, node in ET.iterparse('AndroidManifest.xml', events=['start-ns'])])
+            namespaces = dict([node for _, node in ET.iterparse(manifest, events=['start-ns'])])
             for namespace in namespaces.keys():
                 ET.register_namespace(namespace, namespaces[namespace])
 
             # Parse the XML file
-            tree = ET.parse('AndroidManifest.xml')
+            tree = ET.parse(manifest)
             root = tree.getroot()
             # for application in root.findall('application'):
             #     for activity in application.findall('activity'):
@@ -180,7 +178,7 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
             intent_filter.append(new_element)
             activity.append(intent_filter)
             # Write the modified XML back to the file
-            tree.write('AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
+            tree.write(manifest, encoding='utf-8', xml_declaration=True)
 
     print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
     command = f'apktool b temp_file_dir/{filename}'
@@ -188,13 +186,14 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     subprocess.run(command)
 
     if copy_file:
-        file_path = os.path.basename(input_file).split('/', -1)
-        copy_path = file_path[0] + f'/modified_{file_path[1]}'
-        command = f'mv -f temp_file_dir/{filename}.apk {copy_path}'
+        path, name = os.path.split(input_file)
+        name = f'modified_{name}'
+        copy_path = os.path.join(path, name)
+        command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {copy_path}'
         command = command.split()
         subprocess.run(command)
     else:
-        command = f'mv -f temp_file_dir/{filename}.apk {input_file}'
+        command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {input_file}'
         command = command.split()
         subprocess.run(command)
     print(f'Finished!')
