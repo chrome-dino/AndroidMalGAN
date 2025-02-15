@@ -41,7 +41,7 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     hybrid_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth')).to(DEVICE)
     hybrid_generator.eval()
 
-    filename = os.path.basename(input_file).split('/', -1)[1].split('.', -1)[0]
+    filename = os.path.basename(input_file).split('.', -1)[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
     command = f'apktool d -f {input_file} -o temp_file_dir'
     command = command.split()

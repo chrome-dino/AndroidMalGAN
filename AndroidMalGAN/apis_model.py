@@ -943,4 +943,4 @@ def test():
         validate_ensemble(generator, bb_model['name'], 'apis', test_data_malware, test_data_benign)
 
 # train()
-test()
+# test()

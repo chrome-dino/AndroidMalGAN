@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 from other_apk_feature_extract import labeled_perm_data
 from permissions_model import PermissionsGenerator
 import torch
+import json
 
 SAVED_MODEL_PATH = '../permissions_'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -11,17 +12,20 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def inject(input_file, copy_file=False, blackbox=''):
     os.system('rm -rf temp_file_dir/*')
-    permissions_generator = PermissionsGenerator()
-    permissions_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth')).to(DEVICE)
+    with open(f'../config_permissions_{blackbox}_malgan.json') as f:
+        g = json.load(f)
+        print(blackbox)
+    permissions_generator = PermissionsGenerator(noise_dims=g['g_noise'], input_layers=350, l2=g['g_1'], l3=g['g_2'], l4=g['g_3'])
+    permissions_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth', weights_only=True))
     permissions_generator.eval()
 
-    filename = os.path.basename(input_file).split('/', -1)[1].split('.', -1)[0]
+    filename = os.path.basename(input_file).split('.', -1)[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
     command = f'apktool d -f {input_file} -o temp_file_dir'
     command = command.split()
     subprocess.run(command)
 
-    with open('perm_features.txt', 'r') as file:
+    with open('../perm_features.txt', 'r') as file:
         perm_features = file.read()
         perm_features = perm_features.split('\n')
 

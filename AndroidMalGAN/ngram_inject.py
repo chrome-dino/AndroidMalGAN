@@ -4,16 +4,17 @@ import random
 from opcode_ngram_feature_extract import labeled_data
 from opcode_ngram_model import NgramGenerator
 import torch
+import json
 import numpy as np
 import pandas as pd
 
-SAVED_MODEL_PATH = '../opcode_ngram'
+SAVED_MODEL_PATH = '../opcode_ngram_'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def gen_code(opcode):
     idx = int(opcode, 16)
-    with open('AndroidMalGAN/inject_code.txt') as f:
+    with open('../inject_code.txt') as f:
         inject_list = f.read()
     inject_list = inject_list.split('###')
     del inject_list[0]
@@ -38,15 +39,18 @@ def ngram_to_opcode(ngram):
 
 def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     os.system('rm -rf temp_file_dir/*')
-    ngram_generator = NgramGenerator()
-    ngram_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + f'_{str(n_count)}_final.pth')).to(DEVICE)
+    with open(f'../config_ngram_{str(n_count)}_{blackbox}_malgan.json') as f:
+        g = json.load(f)
+    ngram_generator = NgramGenerator(noise_dims=g['g_noise'], input_layers=350, l2=g['g_1'], l3=g['g_2'], l4=g['g_3'])
+    ngram_generator.load_state_dict(
+        torch.load(SAVED_MODEL_PATH + blackbox + f'_{str(n_count)}_final.pth', weights_only=True))
     ngram_generator.eval()
 
-    with open(f'ngram_features_{str(n_count)}.txt', 'r') as file:
+    with open(f'../ngram_features_{str(n_count)}.txt', 'r') as file:
         ngram_features = file.read()
         ngram_features = ngram_features.split('\n')
 
-    filename = os.path.basename(input_file).split('/', -1)[1].split('.', -1)[0]
+    filename = os.path.basename(input_file).split('.', -1)[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
     command = f'apktool d -f {input_file} -o temp_file_dir'
     command = command.split()

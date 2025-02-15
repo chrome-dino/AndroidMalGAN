@@ -4,6 +4,7 @@ import random
 from other_apk_feature_extract import labeled_api_data
 from apis_model import ApisGenerator
 import torch
+import json
 import numpy as np
 import pandas as pd
 
@@ -13,15 +14,19 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def inject(input_file, copy_file=False, blackbox=''):
     os.system('rm -rf temp_file_dir/*')
-    api_generator = ApisGenerator()
-    api_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth')).to(DEVICE)
+    with open(f'../config_permissions_{blackbox}_malgan.json') as f:
+        g = json.load(f)
+        print(blackbox)
+    api_generator = ApisGenerator(noise_dims=g['g_noise'], input_layers=350, l2=g['g_1'], l3=g['g_2'],
+                                                 l4=g['g_3'])
+    api_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth', weights_only=True))
     api_generator.eval()
 
-    with open('api_features.txt', 'r') as file:
+    with open('../api_features.txt', 'r') as file:
         api_features = file.read()
         api_features = api_features.split('\n')
 
-    filename = os.path.basename(input_file).split('/', -1)[1].split('.', -1)[0]
+    filename = os.path.basename(input_file).split('.', -1)[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
     command = f'apktool d -f {input_file} -o temp_file_dir'
     command = command.split()

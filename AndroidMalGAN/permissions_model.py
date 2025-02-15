@@ -936,4 +936,4 @@ def test():
         validate_ensemble(generator, bb_model['name'], 'permissions', test_data_malware, test_data_benign)
 
 # train()
-test()
+# test()

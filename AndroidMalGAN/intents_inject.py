@@ -3,6 +3,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from other_apk_feature_extract import labeled_intent_data
 from intents_model import IntentsGenerator
+import json
 import torch
 
 SAVED_MODEL_PATH = '../intents_'
@@ -11,17 +12,21 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def inject(input_file, copy_file=False, blackbox=''):
     os.system('rm -rf temp_file_dir/*')
-    intents_generator = IntentsGenerator()
-    intents_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth'))
+    with open(f'../config_permissions_{blackbox}_malgan.json') as f:
+        g = json.load(f)
+        print(blackbox)
+    intents_generator = IntentsGenerator(noise_dims=g['g_noise'], input_layers=350, l2=g['g_1'], l3=g['g_2'],
+                                                 l4=g['g_3'])
+    intents_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth', weights_only=True))
     intents_generator.eval()
 
-    filename = os.path.basename(input_file).split('/', -1)[1].split('.', -1)[0]
+    filename = os.path.basename(input_file).split('.', -1)[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
     command = f'apktool d -f {input_file} -o temp_file_dir'
     command = command.split()
     subprocess.run(command)
 
-    with open('intent_features.txt', 'r') as file:
+    with open('../intent_features.txt', 'r') as file:
         intent_features = file.read()
         intent_features = intent_features.split('\n')
 
