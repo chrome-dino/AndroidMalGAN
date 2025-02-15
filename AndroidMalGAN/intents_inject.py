@@ -12,30 +12,30 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def inject(input_file, copy_file=False, blackbox=''):
     os.system('rm -rf temp_file_dir/*')
-    with open(f'../config_permissions_{blackbox}_malgan.json') as f:
+    with open(f'../config_intents_{blackbox}_malgan.json') as f:
         g = json.load(f)
-        print(blackbox)
-    intents_generator = IntentsGenerator(noise_dims=g['g_noise'], input_layers=350, l2=g['g_1'], l3=g['g_2'],
-                                                 l4=g['g_3'])
+    intents_generator = IntentsGenerator(noise_dims=g['g_noise'], input_layers=350, l2=g['g_1'], l3=g['g_2'], l4=g['g_3'])
     intents_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth', weights_only=True))
+    intents_generator = intents_generator.to(DEVICE)
     intents_generator.eval()
 
     filename = os.path.basename(input_file).split('.', -1)[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
-    command = f'apktool d -f {input_file} -o temp_file_dir'
+    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
 
-    with open('../intent_features.txt', 'r') as file:
+    with open('intent_features.txt', 'r') as file:
         intent_features = file.read()
         intent_features = intent_features.split('\n')
 
     data_malware = labeled_intent_data(root_dir='temp_file_dir', intent_features=intent_features, single_file=True)
     labels_malware = list(data_malware[0].keys())
-    del labels_malware[-1]
+    # del labels_malware[-1]
     data_malware = [data_malware[0][k] for k in labels_malware]
 
-    data_tensor_malware = torch.tensor(data_malware).float()
+    data_tensor_malware = torch.tensor([data_malware]).float()
+    data_tensor_malware = data_tensor_malware.to(DEVICE)
 
     gen_malware = intents_generator(data_tensor_malware)
     gen_malware = gen_malware[0]
@@ -45,14 +45,14 @@ def inject(input_file, copy_file=False, blackbox=''):
         diff = gen_malware - data_tensor_malware[i]
         final[labels_malware[i]] = diff
     print(final)
-
+    manifest = os.path.join('temp_file_dir', filename, 'AndroidManifest.xml')
     for intent in final:
-        namespaces = dict([node for _, node in ET.iterparse('AndroidManifest.xml', events=['start-ns'])])
+        namespaces = dict([node for _, node in ET.iterparse(manifest, events=['start-ns'])])
         for namespace in namespaces.keys():
             ET.register_namespace(namespace, namespaces[namespace])
 
         # Parse the XML file
-        tree = ET.parse('AndroidManifest.xml')
+        tree = ET.parse(manifest)
         root = tree.getroot()
         # for application in root.findall('application'):
         #     for activity in application.findall('activity'):
@@ -70,7 +70,7 @@ def inject(input_file, copy_file=False, blackbox=''):
         intent_filter.append(new_element_act)
         activity.append(intent_filter)
         # Write the modified XML back to the file
-        tree.write('AndroidManifest.xml', encoding='utf-8', xml_declaration=True)
+        tree.write(manifest, encoding='utf-8', xml_declaration=True)
 
     print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
     command = f'apktool b temp_file_dir/{filename}'
@@ -78,13 +78,14 @@ def inject(input_file, copy_file=False, blackbox=''):
     subprocess.run(command)
 
     if copy_file:
-        file_path = os.path.basename(input_file).split('/', -1)
-        copy_path = file_path[0] + f'/modified_{file_path[1]}'
-        command = f'mv -f temp_file_dir/{filename}.apk {copy_path}'
+        path, name = os.path.split(input_file)
+        name = f'modified_{name}'
+        copy_path = os.path.join(path, name)
+        command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {copy_path}'
         command = command.split()
         subprocess.run(command)
     else:
-        command = f'mv -f temp_file_dir/{filename}.apk {input_file}'
+        command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {input_file}'
         command = command.split()
         subprocess.run(command)
     print(f'Finished!')

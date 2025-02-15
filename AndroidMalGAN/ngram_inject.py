@@ -14,7 +14,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def gen_code(opcode):
     idx = int(opcode, 16)
-    with open('../inject_code.txt') as f:
+    with open('inject_code.txt') as f:
         inject_list = f.read()
     inject_list = inject_list.split('###')
     del inject_list[0]
@@ -44,6 +44,7 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     ngram_generator = NgramGenerator(noise_dims=g['g_noise'], input_layers=350, l2=g['g_1'], l3=g['g_2'], l4=g['g_3'])
     ngram_generator.load_state_dict(
         torch.load(SAVED_MODEL_PATH + blackbox + f'_{str(n_count)}_final.pth', weights_only=True))
+    ngram_generator = ngram_generator.to(DEVICE)
     ngram_generator.eval()
 
     with open(f'../ngram_features_{str(n_count)}.txt', 'r') as file:
@@ -52,7 +53,7 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
 
     filename = os.path.basename(input_file).split('.', -1)[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
-    command = f'apktool d -f {input_file} -o temp_file_dir'
+    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
 
@@ -64,13 +65,13 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     # labels_malware = data_malware[:, 0]
     # data_malware = data_malware[:, 1:]
     labels_malware = list(data_malware[0].keys())
-    del labels_malware[-1]
+    # del labels_malware[-1]
     data_malware = [data_malware[0][k] for k in labels_malware]
     # dataNorm_malware = data_malware / np.max(data_malware)
     # dataNorm_malware = 2 * dataNorm_malware - 1
     # convert to tensor
-    data_tensor_malware = torch.tensor(data_malware).float()
-
+    data_tensor_malware = torch.tensor([data_malware]).float()
+    data_tensor_malware = data_tensor_malware.to(DEVICE)
     # noise = torch.as_tensor(np.random.uniform(0, 1, (1, ngram_generator.noise_dims)))
     # malware_noise = torch.cat((data_tensor_malware, noise), 1)
     # data_tensor_malware = data_tensor_malware.to(DEVICE)
@@ -115,13 +116,14 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     subprocess.run(command)
 
     if copy_file:
-        file_path = os.path.basename(input_file).split('/', -1)
-        copy_path = file_path[0] + f'/modified_{file_path[1]}'
-        command = f'mv -f temp_file_dir/{filename}.apk {copy_path}'
+        path, name = os.path.split(input_file)
+        name = f'modified_{name}'
+        copy_path = os.path.join(path, name)
+        command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {copy_path}'
         command = command.split()
         subprocess.run(command)
     else:
-        command = f'mv -f temp_file_dir/{filename}.apk {input_file}'
+        command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {input_file}'
         command = command.split()
         subprocess.run(command)
     print(f'Finished!')

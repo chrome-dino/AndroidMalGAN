@@ -744,7 +744,8 @@ def labeled_api_data(root_dir='.', api_features=None, malware=False, single_file
                 for api_call in api_calls:
                     if api_call in api_features:
                         row[api_call] += 1
-
+    if single_file:
+        return [row]
 
 def get_features():
     # print('extracting permissions features...')

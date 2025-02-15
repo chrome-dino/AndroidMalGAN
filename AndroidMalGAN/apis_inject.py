@@ -14,21 +14,21 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def inject(input_file, copy_file=False, blackbox=''):
     os.system('rm -rf temp_file_dir/*')
-    with open(f'../config_permissions_{blackbox}_malgan.json') as f:
+    with open(f'../config_apis_{blackbox}_malgan.json') as f:
         g = json.load(f)
-        print(blackbox)
     api_generator = ApisGenerator(noise_dims=g['g_noise'], input_layers=350, l2=g['g_1'], l3=g['g_2'],
                                                  l4=g['g_3'])
     api_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + blackbox + '.pth', weights_only=True))
+    api_generator = api_generator.to(DEVICE)
     api_generator.eval()
 
-    with open('../api_features.txt', 'r') as file:
+    with open('api_features.txt', 'r') as file:
         api_features = file.read()
         api_features = api_features.split('\n')
 
     filename = os.path.basename(input_file).split('.', -1)[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
-    command = f'apktool d -f {input_file} -o temp_file_dir'
+    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
     command = command.split()
     subprocess.run(command)
     data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features,
@@ -40,12 +40,13 @@ def inject(input_file, copy_file=False, blackbox=''):
     # labels_malware = data_malware[:, 0]
     # data_malware = data_malware[:, 1:]
     labels_malware = list(data_malware[0].keys())
-    del labels_malware[-1]
+    # del labels_malware[-1]
     data_malware = [data_malware[0][k] for k in labels_malware]
     # dataNorm_malware = data_malware / np.max(data_malware)
     # dataNorm_malware = 2 * dataNorm_malware - 1
     # convert to tensor
-    data_tensor_malware = torch.tensor(data_malware).float()
+    data_tensor_malware = torch.tensor([data_malware]).float()
+    data_tensor_malware = data_tensor_malware.to(DEVICE)
 
     # noise = torch.as_tensor(np.random.uniform(0, 1, (1, ngram_generator.noise_dims)))
     # malware_noise = torch.cat((data_tensor_malware, noise), 1)
@@ -69,7 +70,7 @@ def inject(input_file, copy_file=False, blackbox=''):
     function_end = '.end method\n'
     for api in final:
         smali_inject += function_start
-        smali_inject += 'invoke-virtual {}, ' + api + '\n'
+        smali_inject += 'invoke-virtual {}, ' + api + '(Landroid/app/Activity;Landroid/content/Intent;ILandroid/os/Bundle;)V\n'
         smali_inject += function_end
 
     smali_dir = f'temp_file_dir/{filename}/smali'
@@ -92,13 +93,14 @@ def inject(input_file, copy_file=False, blackbox=''):
     subprocess.run(command)
 
     if copy_file:
-        file_path = os.path.basename(input_file).split('/', -1)
-        copy_path = file_path[0] + f'/modified_{file_path[1]}'
-        command = f'mv -f temp_file_dir/{filename}.apk {copy_path}'
+        path, name = os.path.split(input_file)
+        name = f'modified_{name}'
+        copy_path = os.path.join(path, name)
+        command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {copy_path}'
         command = command.split()
         subprocess.run(command)
     else:
-        command = f'mv -f temp_file_dir/{filename}.apk {input_file}'
+        command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {input_file}'
         command = command.split()
         subprocess.run(command)
     print(f'Finished!')
