@@ -540,3 +540,80 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
         f.write('Blackbox benign MLP\n')
         f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
         f.write('Accuracy:' + str((ben/(mal+ben))*100) + '%\n')
+
+
+def train_blackbox_retrain(malware_data, benign_data, model_type, bb_name, split_data=True):
+    data_malware = np.loadtxt(malware_data, delimiter=',', skiprows=1)
+    data_malware = (data_malware.astype(np.bool_)).astype(float)
+
+    data_benign = np.loadtxt(benign_data, delimiter=',', skiprows=1)
+    data_benign = (data_benign.astype(np.bool_)).astype(float)
+
+    labels_benign = data_benign[:, 0]
+    data_benign = data_benign[:, 1:]
+
+    labels_malware = data_malware[:, 0]
+    data_malware = data_malware[:, 1:]
+
+    data_malware = np.array(data_malware)
+    data_benign = np.array(data_benign)
+
+    # convert to tensor
+    data_tensor_benign = torch.tensor(data_benign).float()
+    data_tensor_malware = torch.tensor(data_malware).float()
+    partition = [0.6, 0.4]
+    if split_data:
+        train_data_benign, data_tensor_benign, train_labels_benign, test_labels_benign = train_test_split(
+            data_tensor_benign, labels_benign, test_size=partition[0], random_state=42)
+        train_data_malware, data_tensor_malware, train_labels_malware, test_labels_malware = train_test_split(
+            data_tensor_malware, labels_malware, test_size=partition[0], random_state=42)
+
+    data_tensor_malware = torch.split(data_tensor_malware, list(data_tensor_benign.size())[0])[0]
+
+    benign_labels = torch.ones(list(data_tensor_benign.size())[0], 1)
+    mal_labels = torch.zeros(list(data_tensor_benign.size())[0], 1)
+    yTrain = torch.cat((mal_labels, benign_labels))
+    xTrain = torch.cat((data_tensor_malware, data_tensor_benign))
+
+    le = LabelEncoder()
+    yTrain = le.fit_transform(yTrain.ravel())
+
+    if bb_name == 'dt':
+        DT = DecisionTreeClassifier()
+        DT.fit(xTrain, yTrain)
+        torch_dt = convert(DT, 'pytorch')
+        torch.save(torch_dt, f'../dt_{model_type}_model.pth')
+
+    if bb_name == 'knn':
+        KNN = KNeighborsClassifier()
+        KNN.fit(xTrain, yTrain)
+        extra_config = {hummingbird.ml.operator_converters.constants.BATCH_SIZE: list(data_tensor_benign.size())[0]}
+        torch_knn = convert(KNN, 'pytorch', extra_config=extra_config)
+        torch.save(torch_knn, f'../knn_{model_type}_model.pth')
+
+    if bb_name == 'rf':
+        RF = RandomForestClassifier()
+        RF.fit(xTrain, yTrain)
+        torch_rf = convert(RF, 'pytorch')
+        torch.save(torch_rf, f'../retrain_model.pth')
+
+    if bb_name == 'svm':
+        SVM = svm.SVC(kernel='linear')
+        SVM.fit(xTrain, yTrain)
+        torch_svm = convert(SVM, 'pytorch')
+        torch.save(torch_svm, f'../retrain_model.pth')
+
+    if bb_name == 'gnb':
+        GNB = GaussianNB()
+        torch_gnb = convert(GNB, 'pytorch')
+        torch.save(torch_gnb, f'../retrain_model.pth')
+
+    if bb_name == 'lr':
+        LR = LogisticRegression()
+        torch_lr = convert(LR, 'pytorch')
+        torch.save(torch_lr, f'../retrain_model.pth')
+
+    if bb_name == 'mlp':
+        with open(f'../config_{model_type}_mlp.json', 'r') as f:
+            mlp_config = json.load(f)
+            train_mlp(mlp_config, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type)

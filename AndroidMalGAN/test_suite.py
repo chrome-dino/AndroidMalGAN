@@ -15,6 +15,14 @@ import subprocess
 import os
 import torch
 import re
+from sklearn.model_selection import train_test_split
+from apis_model import ApisGenerator
+from intents_model import IntentsGenerator
+from permissions_model import PermissionsGenerator
+from opcode_ngram_model import NgramGenerator
+from hybrid_model import HybridGenerator
+import json
+from train_blackbox import train_blackbox_retrain
 
 
 DOWNLOAD_TEST_SET = False
@@ -611,23 +619,82 @@ def run_tests(n_count=5):
         retrain(model_type=model_type)
     return
 
+
 def retrain(model_type=''):
     # train black box on modified train set and save to new pth file
-    train_blackbox(f'../malware_{model_type}_modified.csv', f'../benign_{model_type}.csv', f'retrain_{model_type}', split_data=True)
-    bb_models = [{'name': 'rf', 'path': f'rf_{model_type}_model_retrain.pth'},
-                 {'name': 'dt', 'path': f'dt_{model_type}_model_retrain.pth'},
-                 {'name': 'svm', 'path': f'svm_{model_type}_model_retrain.pth'},
-                 {'name': 'knn', 'path': f'knn_{model_type}_model_retrain.pth'},
-                 {'name': 'gnb', 'path': f'gnb_{model_type}_model_retrain.pth'},
-                 {'name': 'lr', 'path': f'lr_{model_type}_model_modified.pth'},
-                 {'name': 'mlp', 'path': f'{model_type}_mlp_modified.pth'}]
+
+    data_malware = np.loadtxt(f'../malware_{model_type}.csv', delimiter=',', skiprows=1)
+    data_malware = (data_malware.astype(np.bool_)).astype(float)
+    data_malware = data_malware[:, 1:]
+    labels_malware = data_malware[:, 0:]
+    data_malware = np.array(data_malware)
+    data_tensor_malware = torch.tensor(data_malware).float()
+    train_data_malware = data_tensor_malware.to(DEVICE)
+
+    bb_models = [{'name': 'rf', 'path': f'rf_retrain_{model_type}_model.pth'},
+                 {'name': 'dt', 'path': f'dt_retrain_{model_type}_model.pth'},
+                 {'name': 'svm', 'path': f'svm_retrain_{model_type}_model.pth'},
+                 {'name': 'knn', 'path': f'knn_retrain_{model_type}_model.pth'},
+                 {'name': 'gnb', 'path': f'gnb_retrain_{model_type}_model.pth'},
+                 {'name': 'lr', 'path': f'lr_retrain_{model_type}_model.pth'},
+                 {'name': 'mlp', 'path': f'{model_type}_retrain_mlp_model.pth'}]
 
     # test modified test set on new black box
-    labeled_modified = pd.read_csv(f'../malware_{model_type}_modified.csv', nrows=600)
-    labeled_unmodified = pd.read_csv(f'../malware_{model_type}.csv', nrows=600)
-    labeled_benign = pd.read_csv(f'../benign_{model_type}.csv', nrows=600)
+
+    # labeled_unmodified = pd.read_csv(f'../malware_{model_type}.csv')
+    labeled_unmodified = np.loadtxt(f'../malware_{model_type}.csv', delimiter=',', skiprows=1)
+    labeled_unmodified = (labeled_unmodified.astype(np.bool_)).astype(float)
+    labeled_unmodified = labeled_unmodified[:, 1:]
+    labeled_unmodified = torch.tensor(labeled_unmodified).float()
+    data_benign = np.loadtxt(f'../benign_{model_type}.csv', delimiter=',', skiprows=1)
+    data_benign = (data_benign.astype(np.bool_)).astype(float)
+    data_benign = data_benign[:, 1:]
+    labels_benign = data_benign[:, 0:]
+    data_benign = np.array(data_benign)
+    data_tensor_benign = torch.tensor(data_benign).float()
+    train_data_benign = data_tensor_benign.to(DEVICE)
+
+    partition = [0.6, 0.4]
+    labeled_benign, data_tensor_benign, train_labels_benign, test_labels_benign = train_test_split(
+        train_data_benign, labels_benign, test_size=partition[0], random_state=42)
+    input_num = 350
+    if model_type == 'apis':
+        Generator = ApisGenerator
+    elif model_type == 'intents':
+        Generator = IntentsGenerator
+    elif model_type == 'permissions':
+        Generator = PermissionsGenerator
+    elif 'ngram' in model_type:
+        Generator = NgramGenerator
+    else:
+        Generator = HybridGenerator
+        input_num = 460
+
     for bb in bb_models:
-        blackbox = load_blackbox(bb["name"], bb['path'])
+        with open(f'../config_apis_{bb["name"]}_malgan.json') as f:
+            g = json.load(f)
+
+        generator = Generator(noise_dims=g['g_noise'], input_layers=input_num, l2=g['g_1'], l3=g['g_2'], l4=g['g_3'])
+        generator.load_state_dict(torch.load(SAVED_MODEL_PATH + bb['name'] + '.pth', weights_only=True))
+        generator.eval()
+        gen_malware = generator(train_data_malware)
+        binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+        binarized_gen_malware_logical_or = torch.logical_or(train_data_malware, binarized_gen_malware).float()
+        gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
+        df = pd.DataFrame(gen_malware)
+        df.to_csv(f'../malware_{model_type}_modified.csv')
+
+        train_blackbox_retrain(f'../malware_{model_type}_modified.csv', f'../benign_{model_type}.csv', f'retrain_{model_type}', bb['name'])
+        labeled_modified = np.loadtxt(f'../malware_{model_type}_modified.csv', delimiter=',', skiprows=1)
+        labeled_modified = (labeled_modified.astype(np.bool_)).astype(float)
+        labeled_modified = labeled_modified[:, 1:]
+        labeled_modified = torch.tensor(labeled_modified).float()
+        
+        blackbox = load_blackbox(bb["name"], '../retrain_model.pth')
+
+        labeled_modified, data_tensor_malware, train_labels_malware, test_labels_malware = train_test_split(
+            labeled_modified, labels_malware, test_size=partition[0], random_state=42)
+
         results_modified = blackbox_test(test_data=labeled_modified, blackbox=blackbox, bb_name=bb["name"], model_type=model_type)
         if bb["name"] == 'svm':
             results_modified = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_modified]
@@ -679,23 +746,25 @@ def retrain(model_type=''):
         with open('test_suite_results.txt', 'a') as f:
             f.write(result_str + '\n')
 
-    # train black box on half modified set and half unmodified set
-    df1 = pd.read_csv(f'../malware_{model_type}_modified.csv', nrows=500)
-    df2 = pd.read_csv(f'../malware_{model_type}.csv', nrows=500)
-    df_merged = df1.append(df2, ignore_index=True)
-    df_merged.to_csv('../malware_{model_type}_modified.csv')
-    train_blackbox(f'../malware_{model_type}_modified.csv', f'../benign_{model_type}.csv', model_type,
-                   split_data=True)
-    bb_models = [{'name': 'rf', 'path': f'rf_{model_type}_model_merged.pth'},
-                 {'name': 'dt', 'path': f'dt_{model_type}_model_merged.pth'},
-                 {'name': 'svm', 'path': f'svm_{model_type}_model_merged.pth'},
-                 {'name': 'knn', 'path': f'knn_{model_type}_model_merged.pth'},
-                 {'name': 'gnb', 'path': f'gnb_{model_type}_model_merged.pth'},
-                 {'name': 'lr', 'path': f'lr_{model_type}_model_merged.pth'},
-                 {'name': 'mlp', 'path': f'{model_type}_mlp_merged.pth'}]
-    # test modified test set on new black box
-    for bb in bb_models:
-        blackbox = load_blackbox(bb["name"], bb['path'])
+     # train black box on half modified set and half unmodified set
+        df1 = pd.read_csv(f'../malware_{model_type}_modified.csv', skiprows=1, nrows=4000)
+        df2 = pd.read_csv(f'../malware_{model_type}.csv', skiprows=1, nrows=4000)
+        df_merged = df1.append(df2, ignore_index=True)
+        df_merged.to_csv(f'../malware_{model_type}_merged.csv')
+
+        train_blackbox_retrain(f'../malware_{model_type}_merged.csv', f'../benign_{model_type}.csv', model_type, bb['name'], split_data=False)
+        # labeled_modified = pd.read_csv(f'../malware_{model_type}_modified.csv')
+
+        blackbox = load_blackbox(bb["name"], '../retrain_model.pth')
+        labeled_modified = np.loadtxt(f'../malware_{model_type}_modified.csv', delimiter=',', skiprows=4001)
+        labeled_modified = (labeled_modified.astype(np.bool_)).astype(float)
+        labeled_modified = labeled_modified[:, 1:]
+        labeled_modified = torch.tensor(labeled_modified).float()
+        labeled_unmodified = np.loadtxt(f'../malware_{model_type}.csv', delimiter=',', skiprows=4001)
+        labeled_unmodified = (labeled_unmodified.astype(np.bool_)).astype(float)
+        labeled_unmodified = labeled_unmodified[:, 1:]
+        labeled_unmodified = torch.tensor(labeled_unmodified).float()
+
         results_modified = blackbox_test(test_data=labeled_modified, blackbox=blackbox, bb_name=bb["name"], model_type=model_type)
         if bb["name"] == 'svm':
             results_modified = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_modified]
