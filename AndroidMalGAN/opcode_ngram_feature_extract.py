@@ -232,7 +232,7 @@ def extract_ngram_features(root_dir='./samples', feature_count=300, exclude=None
 
 
 def std_opcodes():
-    with open('AndroidMalGAN/std_codes.txt', 'r') as fp:
+    with open('std_codes.txt', 'r') as fp:
         read_lines = fp.readlines()
         for line in read_lines:
             opline = line.split("\n")[0].split(' ')
@@ -247,7 +247,7 @@ def extract():
     # fh = logging.FileHandler('ngram_extract.log')
     # fh.setLevel(logging.DEBUG)
     # logger.addHandler(fh)
-    std_opcodes()
+
 ########################################################################################################################
     for n in range(3, 11):
         print(f'extracting malware {str(n)} gram features...')
@@ -326,3 +326,4 @@ def extract():
         print(f'finished extracting {str(n)} gram data...')
 
         other_apk_feature_extract.get_features()
+std_opcodes()

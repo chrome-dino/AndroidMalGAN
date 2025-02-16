@@ -24,5 +24,5 @@ def daisy_chain_attack(file_path='', n_count=5, blackbox=''):
     return file_path_mod
 
 
-path = daisy_chain_attack(file_path='/home/dsu/Desktop/2eaa082248a55d8e6ec5d3c5910515e0b1f1a9f371d9afcd8f0493eb6e04d635.apk', n_count=5, blackbox='rf')
-print(path)
+# path = daisy_chain_attack(file_path='/home/dsu/Desktop/2eaa082248a55d8e6ec5d3c5910515e0b1f1a9f371d9afcd8f0493eb6e04d635.apk', n_count=5, blackbox='rf')
+# print(path)

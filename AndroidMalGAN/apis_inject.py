@@ -27,10 +27,11 @@ def inject(input_file, copy_file=False, blackbox=''):
         api_features = api_features.split('\n')
 
     filename = os.path.basename(input_file).split('.', -1)[0]
-    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
-    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
+    # print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
+    command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
     command = command.split()
-    subprocess.run(command)
+    process = subprocess.Popen(command)
+    process.wait()
     data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features,
                                     single_file=True)
     # df = pd.DataFrame(data_malware)
@@ -53,13 +54,15 @@ def inject(input_file, copy_file=False, blackbox=''):
     # data_tensor_malware = data_tensor_malware.to(DEVICE)
     # gen_malware = ngram_generator(data_tensor_malware.to(DEVICE)).cpu()
     gen_malware = api_generator(data_tensor_malware)
+    binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+    binarized_gen_malware_logical_or = torch.logical_or(data_tensor_malware, binarized_gen_malware).float()
+    gen_malware = binarized_gen_malware_logical_or
     gen_malware = gen_malware[0]
 
     final = {}
-    for i in range(len(data_tensor_malware)):
-        diff = gen_malware - data_tensor_malware[i]
-        final[labels_malware[i]] = diff
-    print(final)
+    for i in range(len(data_tensor_malware[0])):
+        diff = gen_malware[i] - data_tensor_malware[0][i]
+        final[labels_malware[i]] = diff.item()
 
     smali_inject = ''
     function_start = '''.method private throw2()V
@@ -69,6 +72,8 @@ def inject(input_file, copy_file=False, blackbox=''):
     '''
     function_end = '.end method\n'
     for api in final:
+        if final[api] < 1.0:
+            continue
         smali_inject += function_start
         smali_inject += 'invoke-virtual {}, ' + api + '(Landroid/app/Activity;Landroid/content/Intent;ILandroid/os/Bundle;)V\n'
         smali_inject += function_end
@@ -83,24 +88,26 @@ def inject(input_file, copy_file=False, blackbox=''):
                 smali_files.append(smali_file)
 
     inject_file = random.choice(smali_files)
-    print(f'injecting into file: {inject_file}')
+    # print(f'injecting into file: {inject_file}')
     with open(inject_file, 'a') as file:
         file.write(smali_inject)
 
-    print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
-    command = f'apktool b temp_file_dir/{filename}'
+    # print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
+    command = f'apktool b temp_file_dir/{filename} -q -b'
     command = command.split()
-    subprocess.run(command)
-
+    process = subprocess.Popen(command)
+    process.wait()
     if copy_file:
         path, name = os.path.split(input_file)
         name = f'modified_{name}'
         copy_path = os.path.join(path, name)
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {copy_path}'
         command = command.split()
-        subprocess.run(command)
+        process = subprocess.Popen(command)
+        process.wait()
     else:
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {input_file}'
         command = command.split()
-        subprocess.run(command)
-    print(f'Finished!')
+        process = subprocess.Popen(command)
+        process.wait()
+    # print(f'Finished!')

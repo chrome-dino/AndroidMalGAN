@@ -47,9 +47,10 @@ def hybrid_ensemble_detector(bb_type='', input_file='', n_count=3):
 
     filename = os.path.basename(input_file).split('.')[0]
     print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o {filename}')
-    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
+    command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
     command = command.split()
-    subprocess.run(command)
+    process = subprocess.Popen(command)
+    process.wait()
 
     intent_data_malware = labeled_intent_data(root_dir='temp_file_dir', intent_features=intent_features,
                                              single_file=True)

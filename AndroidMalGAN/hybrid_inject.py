@@ -13,7 +13,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def gen_code(opcode):
     idx = int(opcode, 16)
-    with open('AndroidMalGAN/inject_code.txt') as f:
+    with open('inject_code.txt') as f:
         inject_list = f.read()
     inject_list = inject_list.split('###')
     del inject_list[0]
@@ -42,34 +42,37 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     with open(f'../config_hybrid_{str(n_count)}_{blackbox}_malgan.json') as f:
         g = json.load(f)
     hybrid_generator = HybridGenerator(noise_dims=g['g_noise'], input_layers=460, l2=g['g_1'], l3=g['g_2'], l4=g['g_3'])
-    hybrid_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + f'_{str(n_count)}.pth', weights_only=True))
+    hybrid_generator.load_state_dict(torch.load(SAVED_MODEL_PATH + f'{str(n_count)}_{blackbox}.pth', weights_only=True))
     hybrid_generator = hybrid_generator.to(DEVICE)
     hybrid_generator.eval()
 
     filename = os.path.basename(input_file).split('.', -1)[0]
-    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
-    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
+    # print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
+    command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
     command = command.split()
-    subprocess.run(command)
+    process = subprocess.Popen(command)
+    process.wait()
 
     data_malware = labeled_hybrid_data(root_dir='temp_file_dir', n_count=n_count, single_file=True)
-
     labels_malware = list(data_malware[0].keys())
     data_malware = [data_malware[0][k] for k in labels_malware]
 
-    data_tensor_malware = torch.tensor(data_malware).float()
+    data_tensor_malware = torch.tensor([data_malware]).float()
     data_tensor_malware = data_tensor_malware.to(DEVICE)
     # noise = torch.as_tensor(np.random.uniform(0, 1, (1, ngram_generator.noise_dims)))
     # malware_noise = torch.cat((data_tensor_malware, noise), 1)
     # data_tensor_malware = data_tensor_malware.to(DEVICE)
     # gen_malware = ngram_generator(data_tensor_malware.to(DEVICE)).cpu()
     gen_malware = hybrid_generator(data_tensor_malware)
+    binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+    binarized_gen_malware_logical_or = torch.logical_or(data_tensor_malware, binarized_gen_malware).float()
+    gen_malware = binarized_gen_malware_logical_or
     gen_malware = gen_malware[0]
 
     final = {}
-    for i in range(len(data_tensor_malware)):
-        diff = gen_malware - data_tensor_malware[i]
-        final[labels_malware[i]] = diff
+    for i in range(len(data_tensor_malware[0])):
+        diff = gen_malware[i] - data_tensor_malware[0][i]
+        final[labels_malware[i]] = diff.item()
 
     smali_inject = ''
     function_start = '''.method private throw2()V
@@ -96,6 +99,8 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
 
     for ngrams in final:
         if ngrams in ngram_features:
+            if final[ngrams] < 1.0:
+                continue
             smali_inject += function_start
             smali_inject += ngram_to_opcode(ngrams)
             smali_inject += function_end
@@ -110,12 +115,14 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
                 smali_files.append(smali_file)
 
     inject_file = random.choice(smali_files)
-    print(f'injecting into file: {inject_file}')
+    # print(f'injecting into file: {inject_file}')
     with open(inject_file, 'a') as file:
         file.write(smali_inject)
 
     for api in final:
         if api in api_features:
+            if final[api] < 1.0:
+                continue
             smali_inject += function_start
             smali_inject += 'invoke-virtual {}, ' + api + '(Landroid/app/Activity;Landroid/content/Intent;ILandroid/os/Bundle;)V\n'
             smali_inject += function_end
@@ -130,13 +137,15 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
                 smali_files.append(smali_file)
 
     inject_file = random.choice(smali_files)
-    print(f'injecting into file: {inject_file}')
+    # print(f'injecting into file: {inject_file}')
     with open(inject_file, 'a') as file:
         file.write(smali_inject)
 
     manifest = os.path.join('temp_file_dir', filename, 'AndroidManifest.xml')
     for permission in final:
         if permission in permissions:
+            if final[permission] < 1.0:
+                continue
             namespaces = dict([node for _, node in ET.iterparse(manifest, events=['start-ns'])])
             for namespace in namespaces.keys():
                 ET.register_namespace(namespace, namespaces[namespace])
@@ -154,6 +163,8 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
 
     for intent in final:
         if intent in intent_features:
+            if final[intent] < 1.0:
+                continue
             namespaces = dict([node for _, node in ET.iterparse(manifest, events=['start-ns'])])
             for namespace in namespaces.keys():
                 ET.register_namespace(namespace, namespaces[namespace])
@@ -180,10 +191,11 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
             # Write the modified XML back to the file
             tree.write(manifest, encoding='utf-8', xml_declaration=True)
 
-    print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
-    command = f'apktool b temp_file_dir/{filename}'
+    # print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
+    command = f'apktool b temp_file_dir/{filename} -q -b'
     command = command.split()
-    subprocess.run(command)
+    process = subprocess.Popen(command)
+    process.wait()
 
     if copy_file:
         path, name = os.path.split(input_file)
@@ -191,9 +203,11 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
         copy_path = os.path.join(path, name)
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {copy_path}'
         command = command.split()
-        subprocess.run(command)
+        process = subprocess.Popen(command)
+        process.wait()
     else:
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {input_file}'
         command = command.split()
-        subprocess.run(command)
-    print(f'Finished!')
+        process = subprocess.Popen(command)
+        process.wait()
+    # print(f'Finished!')

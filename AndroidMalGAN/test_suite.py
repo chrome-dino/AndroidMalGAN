@@ -22,7 +22,7 @@ LABEL = True
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/hybrid_'
 DATADIR = os.path.join('DATA')
-MALWAREDIR = DATADIR + '/MALWARE'
+MALWAREDIR = '/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/DATA/MALWARE'
 
 
 def load_blackbox(name, path):
@@ -34,21 +34,25 @@ def load_blackbox(name, path):
             bb = bb.to(DEVICE)
         else:
             load_model = torch.load(path)
-            bb = Classifier2(d_input_dim=350, l1=len(load_model['input.weight']),
+            if 'hybrid' in path:
+                input_len = 460
+            else:
+                input_len = 350
+            bb = Classifier2(d_input_dim=input_len, l1=len(load_model['input.weight']),
                                    l2=len(load_model['fc1.weight']),
                                    l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
 
-            bb.load_state_dict(torch.load(SAVED_MODEL_PATH + 'mlp_model.pth'))
+            bb.load_state_dict(torch.load(path))
             bb = bb.to(DEVICE)
             bb.eval()
     return bb
 
 
 def get_bb_models(model_name):
-    bb_models = [{'name': 'rf', 'path': f'rf_{model_name}_model.pth'}, {'name': 'dt', 'path': f'dt_{model_name}_model.pth'},
-             {'name': 'svm', 'path': f'svm_{model_name}_model.pth'}, {'name': 'knn', 'path': f'knn_{model_name}_model.pth'},
-             {'name': 'gnb', 'path': f'gnb_{model_name}_model.pth'}, {'name': 'lr', 'path': f'lr_{model_name}_model.pth'},
-             {'name': 'mlp', 'path': f'{model_name}_mlp_model.pth'}, {'name': 'ensemble', 'path': ''}]
+    bb_models = [{'name': 'rf', 'path': f'../rf_{model_name}_model.pth'}, {'name': 'dt', 'path': f'../dt_{model_name}_model.pth'},
+             {'name': 'svm', 'path': f'../svm_{model_name}_model.pth'}, {'name': 'knn', 'path': f'../knn_{model_name}_model.pth'},
+             {'name': 'gnb', 'path': f'../gnb_{model_name}_model.pth'}, {'name': 'lr', 'path': f'../lr_{model_name}_model.pth'},
+             {'name': 'mlp', 'path': f'../{model_name}_mlp_model.pth'}, {'name': 'ensemble', 'path': ''}]
     loaded_models = []
     for bb_model in bb_models:
         bb = load_blackbox(bb_model["name"], bb_model['path'])
@@ -74,145 +78,160 @@ def download_samples():
         subprocess.call(['python', 'azoo.py', 'update'])
         subprocess.call(['python', 'azoo.py', 'download', '0', '1000'])
 
+def sample_list():
+    sample_md5s = []
+    with open("hybrid_samples_test.txt", "w") as f:
+        for (root, dirs, files) in os.walk(MALWAREDIR):
+            for file in files:
+                sub_dir = str(os.path.join(root, file))
+                if md5_hash := re.findall(r"([a-fA-F\d]{32})", sub_dir):
+                    if md5_hash[0] not in sample_md5s:
+                        sample_md5s.append(md5_hash[0])
+                        f.write(sub_dir + '\n')
 
 def test_data(n_count=5):
-
-    sample_md5s = []
-    with open("hybrid_samples.txt", "w") as f:
-        for item in os.walk(MALWAREDIR):
-            sub_dir = item[0]
-            if md5_hash := re.findall(r"([a-fA-F\d]{32})", sub_dir):
-                if md5_hash[0] not in sample_md5s:
-                    if not os.listdir(sub_dir):
-                        continue
-                    sample_md5s.append(md5_hash[0])
-                    f.write(sub_dir + '\n')
-
-    with open("hybrid_samples.txt") as samples:
+    with open('intent_features.txt', 'r') as file:
+        features = file.read()
+        intent_features = features.split('\n')
+    with open('perm_features.txt', 'r') as file:
+        features = file.read()
+        perm_features = features.split('\n')
+    with open('api_features.txt', 'r') as file:
+        features = file.read()
+        api_features = features.split('\n')
+    with open(f'ngram_features_{str(n_count)}.txt', 'r') as file:
+        features = file.read()
+        ngram_features = features.split('\n')
+    with open("hybrid_samples_test.txt") as samples:
         hybrid_bb_models = get_bb_models('hybrid_5')
         for bb_model in hybrid_bb_models:
+            print(f'Labelling {bb_model["name"]} test suite...')
+            count = 0
             for s in samples:
                 s = s.rstrip()
                 s_list = list(os.path.split(s))
                 f_name = s_list[-1]
                 s_list[-1] = 'modified_' + f_name
                 s_mod = os.path.join(*s_list)
-                
+                count += 1
+                print(f'{f_name} {str(count)}')
                 intent_inject(s, copy_file=True, blackbox=bb_model["name"])
-                intent_hybrid_row = labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
-                if os.path.isfile(f'intent_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
-                    df = pd.DataFrame(intent_hybrid_row)
-                    df.to_csv(f'intent_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
-                else:
-                    df = pd.DataFrame(intent_hybrid_row)
-                    df.to_csv(f'intent_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
+                intent_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
 
-                intent_row = labeled_intent_data(root_dir=s_mod, malware=False, single_file=True)
-                if os.path.isfile(f'malware_intent_{bb_model["name"]}_modified.csv'):
+                if os.path.isfile(f'test_suite/intent_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
+                    df = pd.DataFrame(intent_hybrid_row)
+                    df.to_csv(f'test_suite/intent_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
+                else:
+                    df = pd.DataFrame(intent_hybrid_row)
+                    df.to_csv(f'test_suite/intent_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
+
+                intent_row = labeled_intent_data(root_dir='temp_file_dir', malware=False, single_file=True, intent_features=intent_features)
+                if os.path.isfile(f'test_suite/malware_intent_{bb_model["name"]}_modified.csv'):
                     df = pd.DataFrame(intent_row)
-                    df.to_csv(f'malware_intent_{bb_model["name"]}_modified.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/malware_intent_{bb_model["name"]}_modified.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(intent_row)
-                    df.to_csv(f'malware_intent_{bb_model["name"]}_modified.csv')
+                    df.to_csv(f'test_suite/malware_intent_{bb_model["name"]}_modified.csv')
 
                 permission_inject(s, copy_file=True, blackbox=bb_model["name"])
-                permission_hybrid_row = labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
-                if os.path.isfile(f'permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
+                permission_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
+                if os.path.isfile(f'test_suite/permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
                     df = pd.DataFrame(permission_hybrid_row)
-                    df.to_csv(f'permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(permission_hybrid_row)
-                    df.to_csv(f'permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
-                permission_row = labeled_perm_data(root_dir=s_mod, malware=False, single_file=True)
-                if os.path.isfile(f'malware_permission_{bb_model["name"]}_modified.csv'):
+                    df.to_csv(f'test_suite/permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
+
+                permission_row = labeled_perm_data(root_dir='temp_file_dir', malware=False, single_file=True, perm_features=perm_features)
+                if os.path.isfile(f'test_suite/malware_permission_{bb_model["name"]}_modified.csv'):
                     df = pd.DataFrame(permission_row)
-                    df.to_csv(f'malware_permission_{bb_model["name"]}_modified.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/malware_permission_{bb_model["name"]}_modified.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(permission_row)
-                    df.to_csv(f'malware_permission_{bb_model["name"]}_modified.csv')
+                    df.to_csv(f'test_suite/malware_permission_{bb_model["name"]}_modified.csv')
 
                 api_inject(s, copy_file=True, blackbox=bb_model["name"])
-                api_hybrid_row = labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
+                api_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
 
-                if os.path.isfile(f'api_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
+                if os.path.isfile(f'test_suite/api_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
                     df = pd.DataFrame(api_hybrid_row)
-                    df.to_csv(f'api_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/api_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(api_hybrid_row)
-                    df.to_csv(f'api_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
+                    df.to_csv(f'test_suite/api_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
 
-                api_row = labeled_api_data(root_dir=s_mod, malware=False, single_file=True)
-                if os.path.isfile(f'malware_api_{bb_model["name"]}_modified.csv'):
+                api_row = labeled_api_data(root_dir='temp_file_dir', malware=False, single_file=True, api_features=api_features)
+                if os.path.isfile(f'test_suite/malware_api_{bb_model["name"]}_modified.csv'):
                     df = pd.DataFrame(api_row)
-                    df.to_csv(f'malware_api_{bb_model["name"]}_modified.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/malware_api_{bb_model["name"]}_modified.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(api_row)
-                    df.to_csv(f'malware_api_{bb_model["name"]}_modified.csv')
+                    df.to_csv(f'test_suite/malware_api_{bb_model["name"]}_modified.csv')
 
                 ngrams_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
-                ngram_hybrid_row = labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
+                ngram_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
 
-                if os.path.isfile(f'ngram_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
+                if os.path.isfile(f'test_suite/ngram_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
                     df = pd.DataFrame(ngram_hybrid_row)
-                    df.to_csv(f'ngram_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/ngram_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(ngram_hybrid_row)
-                    df.to_csv(f'ngram_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
+                    df.to_csv(f'test_suite/ngram_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
 
-                ngram_row = labeled_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
-                if os.path.isfile(f'malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv'):
+                ngram_row = labeled_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True, ngram_features=ngram_features)
+                if os.path.isfile(f'test_suite/malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv'):
                     df = pd.DataFrame(ngram_row)
-                    df.to_csv(f'malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame([ngram_row])
-                    df.to_csv(f'malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv')
+                    df.to_csv(f'test_suite/malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv')
 
                 daisy_chain_attack(file_path=s, n_count=n_count, blackbox=bb_model["name"])
-                daisy_hybrid_row = labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
-                if os.path.isfile(f'daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
+                daisy_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
+                if os.path.isfile(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
                     df = pd.DataFrame(daisy_hybrid_row)
-                    df.to_csv(f'daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(daisy_hybrid_row)
-                    df.to_csv(f'daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
+                    df.to_csv(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
 
                 hybrid_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
-                hybrid_hybrid_row = labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
-                if os.path.isfile(f'hybrid_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
+                hybrid_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
+                if os.path.isfile(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
                     df = pd.DataFrame(hybrid_hybrid_row)
-                    df.to_csv(f'hybrid_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(hybrid_hybrid_row)
-                    df.to_csv(f'hybrid_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
+                    df.to_csv(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
 
-                row = labeled_intent_data(root_dir=s_mod, malware=False, single_file=True)
-                if os.path.isfile(f'hybrid_{str(n_count)}_{bb_model["name"]}_intent.csv'):
+                row = labeled_intent_data(root_dir='temp_file_dir', malware=False, single_file=True, intent_features=intent_features)
+                if os.path.isfile(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_intent.csv'):
                     df = pd.DataFrame(row)
-                    df.to_csv(f'hybrid_{str(n_count)}_{bb_model["name"]}_intent.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_intent.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(row)
-                    df.to_csv(f'hybrid_{str(n_count)}_{bb_model["name"]}_intent.csv')
-                row = labeled_api_data(root_dir=s_mod, malware=False, single_file=True)
-                if os.path.isfile(f'hybrid_{str(n_count)}_{bb_model["name"]}_api.csv'):
+                    df.to_csv(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_intent.csv')
+                row = labeled_api_data(root_dir='temp_file_dir', malware=False, single_file=True, api_features=api_features)
+                if os.path.isfile(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_api.csv'):
                     df = pd.DataFrame(row)
-                    df.to_csv(f'hybrid_{str(n_count)}_{bb_model["name"]}_api.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_api.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(row)
-                    df.to_csv(f'hybrid_{str(n_count)}_{bb_model["name"]}_api.csv')
-                row = labeled_perm_data(root_dir=s_mod, malware=False, single_file=True)
-                if os.path.isfile(f'hybrid_{str(n_count)}_{bb_model["name"]}_permission.csv'):
+                    df.to_csv(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_api.csv')
+                row = labeled_perm_data(root_dir='temp_file_dir', malware=False, single_file=True, perm_features=perm_features)
+                if os.path.isfile(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_permission.csv'):
                     df = pd.DataFrame(row)
-                    df.to_csv(f'hybrid_{str(n_count)}_{bb_model["name"]}_permission.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_permission.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(row)
-                    df.to_csv(f'hybrid_{str(n_count)}_{bb_model["name"]}_permission.csv')
-                row = labeled_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
-                if os.path.isfile(f'hybrid_{str(n_count)}_{bb_model["name"]}_ngram_{str(n_count)}.csv'):
+                    df.to_csv(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_permission.csv')
+                row = labeled_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True, ngram_features=ngram_features)
+                if os.path.isfile(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_ngram_{str(n_count)}.csv'):
                     df = pd.DataFrame(row)
-                    df.to_csv(f'hybrid_{str(n_count)}_{bb_model["name"]}_ngram_{str(n_count)}.csv', mode='a', header=False)
+                    df.to_csv(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_ngram_{str(n_count)}.csv', mode='a', header=False)
                 else:
                     df = pd.DataFrame(row)
-                    df.to_csv(f'hybrid_{str(n_count)}_{bb_model["name"]}_ngram_{str(n_count)}.csv')
+                    df.to_csv(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_ngram_{str(n_count)}.csv')
 
     return
 
@@ -222,7 +241,7 @@ def run_tests(n_count=5):
         os.remove('test_suite_results.txt')
 
     sample_md5s = []
-    with open("hybrid_samples.txt", "w") as f:
+    with open("hybrid_samples_test.txt", "w") as f:
         for item in os.walk(MALWAREDIR):
             sub_dir = item[0]
             if md5_hash := re.findall(r"([a-fA-F\d]{32})", sub_dir):
@@ -243,7 +262,7 @@ def run_tests(n_count=5):
     api_ensemble_results = []
     ngram_ensemble_results = []
     daisy_ensemble_results = []
-    with open("hybrid_samples.txt") as samples:
+    with open("hybrid_samples_test.txt") as samples:
         hybrid_bb_models = get_bb_models('hybrid_5')
         for bb_model in hybrid_bb_models:
             blackbox = bb_model['model']
@@ -667,3 +686,6 @@ def retrain(model_type=''):
         print(result_str)
         with open('test_suite_results.txt', 'a') as f:
             f.write(result_str + '\n')
+
+# sample_list()
+test_data(n_count=5)

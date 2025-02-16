@@ -20,10 +20,11 @@ def inject(input_file, copy_file=False, blackbox=''):
     intents_generator.eval()
 
     filename = os.path.basename(input_file).split('.', -1)[0]
-    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
-    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
+    # print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
+    command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
     command = command.split()
-    subprocess.run(command)
+    process = subprocess.Popen(command)
+    process.wait()
 
     with open('intent_features.txt', 'r') as file:
         intent_features = file.read()
@@ -38,15 +39,19 @@ def inject(input_file, copy_file=False, blackbox=''):
     data_tensor_malware = data_tensor_malware.to(DEVICE)
 
     gen_malware = intents_generator(data_tensor_malware)
+    binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
+    binarized_gen_malware_logical_or = torch.logical_or(data_tensor_malware, binarized_gen_malware).float()
+    gen_malware = binarized_gen_malware_logical_or
     gen_malware = gen_malware[0]
 
     final = {}
-    for i in range(len(data_tensor_malware)):
-        diff = gen_malware - data_tensor_malware[i]
-        final[labels_malware[i]] = diff
-    print(final)
+    for i in range(len(data_tensor_malware[0])):
+        diff = gen_malware[i] - data_tensor_malware[0][i]
+        final[labels_malware[i]] = diff.item()
     manifest = os.path.join('temp_file_dir', filename, 'AndroidManifest.xml')
     for intent in final:
+        if final[intent] < 1.0:
+            continue
         namespaces = dict([node for _, node in ET.iterparse(manifest, events=['start-ns'])])
         for namespace in namespaces.keys():
             ET.register_namespace(namespace, namespaces[namespace])
@@ -72,10 +77,11 @@ def inject(input_file, copy_file=False, blackbox=''):
         # Write the modified XML back to the file
         tree.write(manifest, encoding='utf-8', xml_declaration=True)
 
-    print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
-    command = f'apktool b temp_file_dir/{filename}'
+    # print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
+    command = f'apktool b temp_file_dir/{filename} -q -b'
     command = command.split()
-    subprocess.run(command)
+    process = subprocess.Popen(command)
+    process.wait()
 
     if copy_file:
         path, name = os.path.split(input_file)
@@ -83,9 +89,11 @@ def inject(input_file, copy_file=False, blackbox=''):
         copy_path = os.path.join(path, name)
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {copy_path}'
         command = command.split()
-        subprocess.run(command)
+        process = subprocess.Popen(command)
+        process.wait()
     else:
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {input_file}'
         command = command.split()
-        subprocess.run(command)
-    print(f'Finished!')
+        process = subprocess.Popen(command)
+        process.wait()
+    # print(f'Finished!')

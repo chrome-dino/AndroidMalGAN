@@ -76,7 +76,6 @@ def feature_reduction(n_count=5):
 
 
 def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=False):
-    sample_md5s = []
     if not single_file:
         if malware:
             if os.path.isfile(f'malware_hybrid.csv'):
@@ -86,18 +85,19 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
                 os.remove(f'benign_hybrid.csv')
 
     count = 0
+    sample_md5s = []
     with open("hybrid_samples.txt", "w") as f:
-        for item in os.walk(root_dir):
-            sub_dir = item[0]
-            if md5_hash := re.findall(r"([a-fA-F\d]{32})", sub_dir):
-                if md5_hash[0] not in sample_md5s:
-                    if not os.listdir(sub_dir):
-                        continue
-                    sample_md5s.append(md5_hash[0])
-                    f.write(sub_dir + '\n')
-                    count += 1
-                    if LIMIT and count >= MAX_COLLECT:
-                        break
+        for (root, dirs, files) in os.walk(root_dir):
+            for file in files:
+                sub_dir = root
+                if md5_hash := re.findall(r"([a-fA-F\d]{32})", sub_dir):
+                    if md5_hash[0] not in sample_md5s:
+                        sample_md5s.append(md5_hash[0])
+                        f.write(sub_dir + '\n')
+                        count += 1
+                        if LIMIT and count >= MAX_COLLECT:
+                            break
+
 
     count = 0
     with open(f'malware_features_{str(n_count)}.txt', 'r') as file:
@@ -140,13 +140,13 @@ def labeled_hybrid_data(root_dir='.', malware=False, n_count=3, single_file=Fals
         for s in samples:
             s = s.rstrip()
             file_ngrams = labeled_ngram_data(root_dir=s, ngram_features=ngram_features, malware=malware, n_count=n_count,
-                                             single_file=True)
+                                             single_file=True)[0]
             file_apis = labeled_api_data(root_dir=s, api_features=api_features, malware=malware,
-                                         single_file=True)
+                                         single_file=True)[0]
 
-            file_permissions = labeled_perm_data(root_dir=s, perm_features=perm_features, malware=malware, single_file=True)
+            file_permissions = labeled_perm_data(root_dir=s, perm_features=perm_features, malware=malware, single_file=True)[0]
             file_intents = labeled_intent_data(root_dir=s, intent_features=intent_features, malware=malware,
-                                               single_file=True)
+                                               single_file=True)[0]
             if file_ngrams is None or file_apis is None or file_permissions is None or file_intents is None:
                 continue
             row = file_intents | file_permissions | file_apis | file_ngrams
@@ -184,5 +184,3 @@ def extract():
     # print('running feature reduction...')
     # feature_reduction()
     print('Done!')
-
-extract()
