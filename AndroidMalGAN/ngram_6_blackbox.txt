@@ -70,3 +70,6 @@ weighted avg       0.95      0.95      0.95       603
 
 LR Accuracy
 94.5273631840796
+Blackbox unmodified malware LR
+test set predicted: 93 benign files and 2922 malicious files
+Accuracy:96.91542288557214%

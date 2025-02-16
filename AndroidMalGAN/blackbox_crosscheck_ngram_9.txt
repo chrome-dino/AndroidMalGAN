@@ -1,42 +1,56 @@
-rf ngram 9 malgan tested against dt: 0 benign files and 357 malicious files
-rf ngram 9 malgan tested against svm: 354 benign files and 3 malicious files
-rf ngram 9 malgan tested against knn: 3015 benign files and 0 malicious files
-rf ngram 9 malgan tested against gnb: 0 benign files and 357 malicious files
-rf ngram 9 malgan tested against lr: 342 benign files and 15 malicious files
-rf ngram 9 malgan tested against mlp: 357 benign files and 0 malicious files
-dt ngram 9 malgan tested against rf: 357 benign files and 0 malicious files
-dt ngram 9 malgan tested against svm: 357 benign files and 0 malicious files
-dt ngram 9 malgan tested against knn: 3015 benign files and 0 malicious files
-dt ngram 9 malgan tested against gnb: 329 benign files and 28 malicious files
-dt ngram 9 malgan tested against lr: 356 benign files and 1 malicious files
-dt ngram 9 malgan tested against mlp: 357 benign files and 0 malicious files
-svm ngram 9 malgan tested against rf: 357 benign files and 0 malicious files
-svm ngram 9 malgan tested against dt: 56 benign files and 301 malicious files
-svm ngram 9 malgan tested against knn: 3015 benign files and 0 malicious files
-svm ngram 9 malgan tested against gnb: 0 benign files and 357 malicious files
-svm ngram 9 malgan tested against lr: 320 benign files and 37 malicious files
-svm ngram 9 malgan tested against mlp: 352 benign files and 5 malicious files
-knn ngram 9 malgan tested against rf: 357 benign files and 0 malicious files
-knn ngram 9 malgan tested against dt: 139 benign files and 218 malicious files
-knn ngram 9 malgan tested against svm: 299 benign files and 58 malicious files
-knn ngram 9 malgan tested against gnb: 0 benign files and 357 malicious files
-knn ngram 9 malgan tested against lr: 296 benign files and 61 malicious files
-knn ngram 9 malgan tested against mlp: 357 benign files and 0 malicious files
-gnb ngram 9 malgan tested against rf: 357 benign files and 0 malicious files
-gnb ngram 9 malgan tested against dt: 201 benign files and 156 malicious files
-gnb ngram 9 malgan tested against svm: 9 benign files and 348 malicious files
-gnb ngram 9 malgan tested against knn: 3015 benign files and 0 malicious files
-gnb ngram 9 malgan tested against lr: 10 benign files and 347 malicious files
-gnb ngram 9 malgan tested against mlp: 357 benign files and 0 malicious files
-lr ngram 9 malgan tested against rf: 357 benign files and 0 malicious files
-lr ngram 9 malgan tested against dt: 328 benign files and 29 malicious files
-lr ngram 9 malgan tested against svm: 357 benign files and 0 malicious files
-lr ngram 9 malgan tested against knn: 3015 benign files and 0 malicious files
-lr ngram 9 malgan tested against gnb: 0 benign files and 357 malicious files
-lr ngram 9 malgan tested against mlp: 357 benign files and 0 malicious files
-mlp ngram 9 malgan tested against rf: 317 benign files and 40 malicious files
-mlp ngram 9 malgan tested against dt: 211 benign files and 146 malicious files
-mlp ngram 9 malgan tested against svm: 4 benign files and 353 malicious files
-mlp ngram 9 malgan tested against knn: 2846 benign files and 169 malicious files
-mlp ngram 9 malgan tested against gnb: 0 benign files and 357 malicious files
-mlp ngram 9 malgan tested against lr: 6 benign files and 351 malicious files
+rf ngram-9 malgan tested against dt: 342 benign files and 15 malicious files | 95.7983193277311% bypass
+rf ngram-9 malgan tested against svm: 354 benign files and 3 malicious files | 99.15966386554622% bypass
+rf ngram-9 malgan tested against knn: 357 benign files and 0 malicious files | 100.0% bypass
+rf ngram-9 malgan tested against gnb: 0 benign files and 357 malicious files | 0.0% bypass
+rf ngram-9 malgan tested against lr: 352 benign files and 5 malicious files | 98.59943977591037% bypass
+rf ngram-9 malgan tested against mlp: 357 benign files and 0 malicious files | 100.0% bypass
+rf ngram-9 malgan tested against ensemble: 357 benign files and 0 malicious files | 100.0% bypass
+dt ngram-9 malgan tested against rf: 357 benign files and 0 malicious files | 100.0% bypass
+dt ngram-9 malgan tested against svm: 262 benign files and 95 malicious files | 73.38935574229691% bypass
+dt ngram-9 malgan tested against knn: 357 benign files and 0 malicious files | 100.0% bypass
+dt ngram-9 malgan tested against gnb: 0 benign files and 357 malicious files | 0.0% bypass
+dt ngram-9 malgan tested against lr: 263 benign files and 94 malicious files | 73.66946778711485% bypass
+dt ngram-9 malgan tested against mlp: 357 benign files and 0 malicious files | 100.0% bypass
+dt ngram-9 malgan tested against ensemble: 352 benign files and 5 malicious files | 98.59943977591037% bypass
+svm ngram-9 malgan tested against rf: 357 benign files and 0 malicious files | 100.0% bypass
+svm ngram-9 malgan tested against dt: 214 benign files and 143 malicious files | 59.943977591036415% bypass
+svm ngram-9 malgan tested against knn: 357 benign files and 0 malicious files | 100.0% bypass
+svm ngram-9 malgan tested against gnb: 0 benign files and 357 malicious files | 0.0% bypass
+svm ngram-9 malgan tested against lr: 289 benign files and 68 malicious files | 80.95238095238095% bypass
+svm ngram-9 malgan tested against mlp: 355 benign files and 2 malicious files | 99.43977591036415% bypass
+svm ngram-9 malgan tested against ensemble: 354 benign files and 3 malicious files | 99.15966386554622% bypass
+knn ngram-9 malgan tested against rf: 357 benign files and 0 malicious files | 100.0% bypass
+knn ngram-9 malgan tested against dt: 177 benign files and 180 malicious files | 49.57983193277311% bypass
+knn ngram-9 malgan tested against svm: 257 benign files and 100 malicious files | 71.98879551820728% bypass
+knn ngram-9 malgan tested against gnb: 0 benign files and 357 malicious files | 0.0% bypass
+knn ngram-9 malgan tested against lr: 326 benign files and 31 malicious files | 91.31652661064426% bypass
+knn ngram-9 malgan tested against mlp: 357 benign files and 0 malicious files | 100.0% bypass
+knn ngram-9 malgan tested against ensemble: 326 benign files and 31 malicious files | 91.31652661064426% bypass
+gnb ngram-9 malgan tested against rf: 357 benign files and 0 malicious files | 100.0% bypass
+gnb ngram-9 malgan tested against dt: 194 benign files and 163 malicious files | 54.34173669467787% bypass
+gnb ngram-9 malgan tested against svm: 33 benign files and 324 malicious files | 9.243697478991598% bypass
+gnb ngram-9 malgan tested against knn: 354 benign files and 3 malicious files | 99.15966386554622% bypass
+gnb ngram-9 malgan tested against lr: 23 benign files and 334 malicious files | 6.442577030812324% bypass
+gnb ngram-9 malgan tested against mlp: 328 benign files and 29 malicious files | 91.87675070028011% bypass
+gnb ngram-9 malgan tested against ensemble: 324 benign files and 33 malicious files | 90.75630252100841% bypass
+lr ngram-9 malgan tested against rf: 357 benign files and 0 malicious files | 100.0% bypass
+lr ngram-9 malgan tested against dt: 236 benign files and 121 malicious files | 66.1064425770308% bypass
+lr ngram-9 malgan tested against svm: 357 benign files and 0 malicious files | 100.0% bypass
+lr ngram-9 malgan tested against knn: 357 benign files and 0 malicious files | 100.0% bypass
+lr ngram-9 malgan tested against gnb: 0 benign files and 357 malicious files | 0.0% bypass
+lr ngram-9 malgan tested against mlp: 357 benign files and 0 malicious files | 100.0% bypass
+lr ngram-9 malgan tested against ensemble: 357 benign files and 0 malicious files | 100.0% bypass
+mlp ngram-9 malgan tested against rf: 357 benign files and 0 malicious files | 100.0% bypass
+mlp ngram-9 malgan tested against dt: 262 benign files and 95 malicious files | 73.38935574229691% bypass
+mlp ngram-9 malgan tested against svm: 357 benign files and 0 malicious files | 100.0% bypass
+mlp ngram-9 malgan tested against knn: 357 benign files and 0 malicious files | 100.0% bypass
+mlp ngram-9 malgan tested against gnb: 0 benign files and 357 malicious files | 0.0% bypass
+mlp ngram-9 malgan tested against lr: 355 benign files and 2 malicious files | 99.43977591036415% bypass
+mlp ngram-9 malgan tested against ensemble: 357 benign files and 0 malicious files | 100.0% bypass
+ensemble ngram-9 malgan tested against rf: 357 benign files and 0 malicious files | 100.0% bypass
+ensemble ngram-9 malgan tested against dt: 284 benign files and 73 malicious files | 79.55182072829132% bypass
+ensemble ngram-9 malgan tested against svm: 357 benign files and 0 malicious files | 100.0% bypass
+ensemble ngram-9 malgan tested against knn: 357 benign files and 0 malicious files | 100.0% bypass
+ensemble ngram-9 malgan tested against gnb: 0 benign files and 357 malicious files | 0.0% bypass
+ensemble ngram-9 malgan tested against lr: 357 benign files and 0 malicious files | 100.0% bypass
+ensemble ngram-9 malgan tested against mlp: 357 benign files and 0 malicious files | 100.0% bypass

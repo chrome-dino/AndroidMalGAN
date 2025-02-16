@@ -706,9 +706,8 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
             ben += 1
         else:
             mal += 1
-    LOGGER.info(f'test set benign predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
-    print(f'test set benign predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
     acc_ben = ben / (ben + mal)
+    print(f'test set benign predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name} | {str(acc_ben * 100)}% score')
     tn = ben
     fp = mal
 
@@ -719,9 +718,8 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
             ben += 1
         else:
             mal += 1
-    LOGGER.info(f'test set malware predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
-    print(f'test set malware predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
     acc_mal = mal / (ben + mal)
+    print(f'test set malware predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name} | {str(acc_mal * 100)}% score')
     tp_mal = mal
     fn_mal = ben
     acc_mal_ben = (tp_mal + tn) / (fn_mal + fp + tp_mal + tn)
@@ -756,8 +754,8 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
             ben += 1
         else:
             mal += 1
-    LOGGER.info(f'test set modified predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
-    print(f'test set modified predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
+    bypass = ben / (ben + mal)
+    print(f'test set modified predicted: {str(ben)} benign files and {str(mal)} malicious files | {str(bypass * 100)}% bypass')
     acc_gen = mal / (ben + mal)
     tp_gen = mal
     fn_gen = ben
@@ -792,14 +790,14 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
                'gen malware set precision': precision_gen_ben,
                'gen malware set recall': recall_gen_ben,
                'gen malware set f1': f1_gen_ben,
-               'gen malware perturbations avg': perturbations
+               'gen malware perturbations avg': perturbations.item()
                }
-    if os.path.isfile(f'results.csv'):
+    if os.path.isfile(f'results_ngram_{str(n_count)}.csv'):
         df = pd.DataFrame([results])
-        df.to_csv(f'results.csv', mode='a', header=False)
+        df.to_csv(f'results_ngram_{str(n_count)}.csv', mode='a', header=False)
     else:
         df = pd.DataFrame([results])
-        df.to_csv(f'results.csv')
+        df.to_csv(f'results_ngram_{str(n_count)}.csv')
 
     bb_models = [{'name': 'rf', 'path': f'../rf_ngram_{str(n_count)}_model.pth'}, {'name': 'dt', 'path': f'../dt_ngram_{str(n_count)}_model.pth'},
                  {'name': 'svm', 'path': f'../svm_ngram_{str(n_count)}_model.pth'}, {'name': 'knn', 'path': f'../knn_ngram_{str(n_count)}_model.pth'},
@@ -842,9 +840,10 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign, n_count):
                 ben += 1
             else:
                 mal += 1
-        result_str = f'{bb_name} ngram {str(n_count)} malgan tested against {bb_model["name"]}: {str(ben)} benign files and {str(mal)} malicious files'
+        bypass = ben / (ben + mal)
+        result_str = f'{bb_name} ngram-{str(n_count)} malgan tested against {bb_model["name"]}: {str(ben)} benign files and {str(mal)} malicious files | {str(bypass * 100)}% bypass'
         print(result_str)
-        LOGGER.info(result_str)
+        # LOGGER.info(result_str)
         with open(f'blackbox_crosscheck_ngram_{str(n_count)}.txt', 'a') as f:
             f.write(result_str + '\n')
 

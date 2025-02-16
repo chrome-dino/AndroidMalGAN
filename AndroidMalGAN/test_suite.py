@@ -28,9 +28,9 @@ from train_blackbox import train_blackbox_retrain
 DOWNLOAD_TEST_SET = False
 LABEL = True
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-SAVED_MODEL_PATH = '/home/dsu/Documents/AndroidMalGAN/hybrid_'
+SAVED_MODEL_PATH = '../hybrid_'
 DATADIR = os.path.join('DATA')
-MALWAREDIR = '/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN/DATA/MALWARE'
+MALWAREDIR = 'DATA/MALWARE'
 
 
 def load_blackbox(name, path):

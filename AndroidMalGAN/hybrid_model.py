@@ -593,8 +593,8 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
         else:
             mal += 1
 
-    print(f'test set benign predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
     acc_ben = ben / (ben + mal)
+    print(f'test set benign predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name} | {str(acc_ben * 100)}% score')
     tn = ben
     fp = mal
 
@@ -607,8 +607,8 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
         else:
             mal += 1
 
-    print(f'test set malware predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name}')
     acc_mal = mal / (ben + mal)
+    print(f'test set malware predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_name} | {str(acc_mal * 100)}% score')
     tp_mal = mal
     fn_mal = ben
     acc_mal_ben = (tp_mal + tn) / (fn_mal + fp + tp_mal + tn)
@@ -645,7 +645,8 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
             ben += 1
         else:
             mal += 1
-    print(f'test set modified predicted: {str(ben)} benign files and {str(mal)} malicious files')
+    bypass = ben / (ben + mal)
+    print(f'test set modified predicted: {str(ben)} benign files and {str(mal)} malicious files | {str(bypass * 100)}% bypass')
     acc_gen = mal / (ben + mal)
     tp_gen = mal
     fn_gen = ben
@@ -679,7 +680,7 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
                'gen malware set precision': precision_gen_ben,
                'gen malware set recall': recall_gen_ben,
                'gen malware set f1': f1_gen_ben,
-               'gen malware perturbations avg': perturbations
+               'gen malware perturbations avg': perturbations.item()
                }
     if os.path.isfile(f'results_hybrid_5.csv'):
         df = pd.DataFrame([results])
@@ -726,9 +727,10 @@ def validate(generator, blackbox, bb_name, data_malware, data_benign):
                 ben += 1
             else:
                 mal += 1
-        result_str = f'{bb_name} hybrid_5 malgan tested against {bb_model["name"]}: {str(ben)} benign files and {str(mal)} malicious files'
+        bypass = ben / (ben + mal)
+        result_str = f'{bb_name} hybrid_5 malgan tested against {bb_model["name"]}: {str(ben)} benign files and {str(mal)} malicious files | {str(bypass * 100)}% bypass'
         print(result_str)
-        with open('blackbox_crosscheck_intent.txt', 'a') as f:
+        with open('blackbox_crosscheck_hybrid_5.txt', 'a') as f:
             f.write(result_str + '\n')
 
 
@@ -739,8 +741,8 @@ def train():
         ray.init()
     if TRAIN_BLACKBOX:
         train_blackbox(f'malware_hybrid_{str(N_COUNT)}.csv', f'benign_hybrid_{str(N_COUNT)}.csv', f'hybrid_{str(N_COUNT)}', split_data=SPLIT_DATA)
-    if os.path.exists('blackbox_crosscheck_hybrid.txt'):
-        os.remove('blackbox_crosscheck_hybrid.txt')
+    if os.path.exists('blackbox_crosscheck_hybrid_5.txt'):
+        os.remove('blackbox_crosscheck_hybrid_5.txt')
     print('#######################################################################################################')
     print(f'Starting training for hybrid_5 MalGAN')
     print('#######################################################################################################')

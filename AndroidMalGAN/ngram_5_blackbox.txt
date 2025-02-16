@@ -112,3 +112,6 @@ Accuracy:86.56716417910447%
 Blackbox benign MLP
 test set predicted: 2862 benign files and 153 malicious files
 Accuracy:94.92537313432837%
+Blackbox unmodified malware LR
+test set predicted: 113 benign files and 2902 malicious files
+Accuracy:96.25207296849088%
