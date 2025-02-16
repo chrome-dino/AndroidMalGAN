@@ -120,7 +120,7 @@ def test_data(n_count=5):
                     print(f'{f_name} {str(count)}')
                     # print('####################intent_inject####################')
                     intent_inject(s, copy_file=True, blackbox=bb_model["name"])
-                    with open("test_suite/intent_ensemble_results.txt", "a") as f:
+                    with open(f"test_suite/intent_ensemble_{bb_model['name']}_results.txt", "a") as f:
                         result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
                         f.write(str(result) + f' {f_name}\n')
 
@@ -143,7 +143,7 @@ def test_data(n_count=5):
                         df.to_csv(f'test_suite/malware_intent_{bb_model["name"]}_modified.csv')
                     # print('####################permission_inject####################')
                     permission_inject(s, copy_file=True, blackbox=bb_model["name"])
-                    with open("test_suite/permission_ensemble_results.txt", "a") as f:
+                    with open(f"test_suite/permission_ensemble_{bb_model['name']}_results.txt", "a") as f:
                         result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
                         f.write(str(result) + f' {f_name}\n')
 
@@ -166,7 +166,7 @@ def test_data(n_count=5):
                         df.to_csv(f'test_suite/malware_permission_{bb_model["name"]}_modified.csv')
                     # print('#####################api_inject####################')
                     api_inject(s, copy_file=True, blackbox=bb_model["name"])
-                    with open("test_suite/api_ensemble_results.txt", "a") as f:
+                    with open(f"test_suite/api_ensemble_{bb_model['name']}_results.txt", "a") as f:
                         result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
                         f.write(str(result) + f' {f_name}\n')
 
@@ -189,7 +189,7 @@ def test_data(n_count=5):
                         df.to_csv(f'test_suite/malware_api_{bb_model["name"]}_modified.csv')
                     # print('#####################ngram_inject####################')
                     ngrams_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
-                    with open(f"test_suite/ngram_{str(n_count)}_ensemble_results.txt", "a") as f:
+                    with open(f"test_suite/ngram_{str(n_count)}_ensemble_{bb_model['name']}_results.txt", "a") as f:
                         result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
                         f.write(str(result) + f' {f_name}\n')
 
@@ -212,7 +212,7 @@ def test_data(n_count=5):
                         df.to_csv(f'test_suite/malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv')
                     # print('#####################daisy_inject####################')
                     daisy_chain_attack(file_path=s, n_count=n_count, blackbox=bb_model["name"])
-                    with open("test_suite/daisy_ensemble_results.txt", "a") as f:
+                    with open(f"test_suite/daisy_ensemble_{bb_model['name']}_results.txt", "a") as f:
                         result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
                         f.write(str(result) + f' {f_name}\n')
 
@@ -226,7 +226,7 @@ def test_data(n_count=5):
                         df.to_csv(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
                     # print('#####################hybrid_inject####################')
                     hybrid_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
-                    with open("test_suite/hybrid_ensemble_results.txt", "a") as f:
+                    with open(f"test_suite/hybrid_ensemble_{bb_model['name']}_results.txt", "a") as f:
                         result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
                         f.write(str(result) + f' {f_name}\n')
 
@@ -274,7 +274,7 @@ def test_data(n_count=5):
                 except Exception as e:
                     print(e)
                     count = count - 1
-                    with open("test_suite/failed.txt", "a") as f:
+                    with open(f"test_suite/failed_{bb_model['name']}.txt", "a") as f:
                         f.write(f'{f_name}\n')
     return
 
