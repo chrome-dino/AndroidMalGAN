@@ -56,8 +56,11 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     # print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
     command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
     command = command.split()
-    process = subprocess.Popen(command)
-    process.wait()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE)
+    out, err = process.communicate()
+    if err:
+        print(err)
+        raise
     manifest = os.path.join('temp_file_dir', filename, 'AndroidManifest.xml')
     tree = ET.parse(manifest)
     root = tree.getroot()
@@ -139,11 +142,17 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
         copy_path = os.path.join(path, name)
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {copy_path}'
         command = command.split()
-        process = subprocess.Popen(command)
-        process.wait()
+        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err)
+            raise
     else:
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {input_file}'
         command = command.split()
-        process = subprocess.Popen(command)
-        process.wait()
+        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err)
+            raise
     # print(f'Finished!')

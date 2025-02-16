@@ -23,12 +23,9 @@ def load_mlp(path):
     return bb
 
 
-def hybrid_ensemble_detector(bb_type='', input_file='', n_count=3):
-
-    combined = []
-
-    os.system('rm -rf temp_file_dir')
-
+def hybrid_ensemble_detector(bb_type='', input_file='', n_count=3, inject=False):
+    if inject:
+        os.system('rm -rf temp_file_dir/*')
     with open('api_features.txt', 'r') as file:
         api_features = file.read()
         api_features = api_features.split('\n')
@@ -41,53 +38,98 @@ def hybrid_ensemble_detector(bb_type='', input_file='', n_count=3):
         perm_features = file.read()
         perm_features = perm_features.split('\n')
 
-    with open(f'ngram_{str(n_count)}_features.txt', 'r') as file:
+    with open(f'ngram_features_{str(n_count)}.txt', 'r') as file:
         ngram_features = file.read()
         ngram_features = ngram_features.split('\n')
 
     filename = os.path.basename(input_file).split('.')[0]
-    print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o {filename}')
-    command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
-    command = command.split()
-    process = subprocess.Popen(command)
-    process.wait()
+    # print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o {filename}')
+    if inject:
+        command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
+        command = command.split()
+        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err)
+            raise
 
-    intent_data_malware = labeled_intent_data(root_dir='temp_file_dir', intent_features=intent_features,
-                                             single_file=True)
-    permission_data_malware = labeled_perm_data(root_dir='temp_file_dir', perm_features=perm_features, single_file=True)
-    api_data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features, single_file=True)
-    ngram_data_malware = labeled_data(root_dir='temp_file_dir', ngram_features=ngram_features, n_count=n_count, single_file=True)
+    data_malware = labeled_intent_data(root_dir='temp_file_dir', intent_features=intent_features, single_file=True)
+    labels_malware = list(data_malware[0].keys())
+    data_malware = [data_malware[0][k] for k in labels_malware]
+    data_tensor_malware = torch.tensor([data_malware]).float()
+    if bb_type != 'knn':
+        intent_data_malware = data_tensor_malware.to(DEVICE)
+    else:
+        intent_data_malware = data_tensor_malware.to(DEVICE_CPU)
 
+    data_malware = labeled_perm_data(root_dir='temp_file_dir', perm_features=perm_features, single_file=True)
+    labels_malware = list(data_malware[0].keys())
+    data_malware = [data_malware[0][k] for k in labels_malware]
+    data_tensor_malware = torch.tensor([data_malware]).float()
+    if bb_type != 'knn':
+        permission_data_malware = data_tensor_malware.to(DEVICE)
+    else:
+        permission_data_malware = data_tensor_malware.to(DEVICE_CPU)
+
+    data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features, single_file=True)
+    labels_malware = list(data_malware[0].keys())
+    data_malware = [data_malware[0][k] for k in labels_malware]
+    data_tensor_malware = torch.tensor([data_malware]).float()
+    if bb_type != 'knn':
+        api_data_malware = data_tensor_malware.to(DEVICE)
+    else:
+        api_data_malware = data_tensor_malware.to(DEVICE_CPU)
+
+    data_malware = labeled_data(root_dir='temp_file_dir', ngram_features=ngram_features, n_count=n_count, single_file=True)
+    labels_malware = list(data_malware[0].keys())
+    data_malware = [data_malware[0][k] for k in labels_malware]
+    data_tensor_malware = torch.tensor([data_malware]).float()
+    if bb_type != 'knn':
+        ngram_data_malware = data_tensor_malware.to(DEVICE)
+    else:
+        ngram_data_malware = data_tensor_malware.to(DEVICE_CPU)
     combined_results = []
     if bb_type == 'mlp':
-        blackbox = load_mlp(SAVED_MODEL_PATH + f'{bb_type}_intents_model.pth')
+        blackbox = load_mlp(SAVED_MODEL_PATH + f'intents_{bb_type}_model.pth')
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(intent_data_malware))
-        blackbox = load_mlp(SAVED_MODEL_PATH + f'{bb_type}_apis_model.pth')
+        blackbox = load_mlp(SAVED_MODEL_PATH + f'apis_{bb_type}_model.pth')
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(api_data_malware))
-        blackbox = load_mlp(SAVED_MODEL_PATH + f'{bb_type}_permissions_model.pth')
+        blackbox = load_mlp(SAVED_MODEL_PATH + f'permissions_{bb_type}_model.pth')
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(permission_data_malware))
-        blackbox = load_mlp(SAVED_MODEL_PATH + f'{bb_type}_ngrams_{str(n_count)}_model.pth')
+        blackbox = load_mlp(SAVED_MODEL_PATH + f'ngram_{str(n_count)}_{bb_type}_model.pth')
         blackbox = blackbox.to(DEVICE)
         blackbox.eval()
         combined_results.append(blackbox(ngram_data_malware))
     else:
-        blackbox = torch.load(f'{bb_type}_intents_model.pth')
-        blackbox = blackbox.to(DEVICE)
+        blackbox = torch.load(SAVED_MODEL_PATH + f'{bb_type}_intents_model.pth')
+        if bb_type != 'knn':
+            blackbox = blackbox.to(DEVICE)
+        else:
+            blackbox = blackbox.to(DEVICE_CPU)
         combined_results.append(blackbox.predict_proba(intent_data_malware))
-        blackbox = torch.load(f'{bb_type}_apis_model.pth')
-        blackbox = blackbox.to(DEVICE)
+        blackbox = torch.load(SAVED_MODEL_PATH + f'{bb_type}_apis_model.pth')
+        if bb_type != 'knn':
+            blackbox = blackbox.to(DEVICE)
+        else:
+            blackbox = blackbox.to(DEVICE_CPU)
         combined_results.append(blackbox.predict_proba(api_data_malware))
-        blackbox = torch.load(f'{bb_type}_permissions_model.pth')
-        blackbox = blackbox.to(DEVICE)
+        blackbox = torch.load(SAVED_MODEL_PATH + f'{bb_type}_permissions_model.pth')
+        if bb_type != 'knn':
+            blackbox = blackbox.to(DEVICE)
+        else:
+            blackbox = blackbox.to(DEVICE_CPU)
         combined_results.append(blackbox.predict_proba(permission_data_malware))
-        blackbox = torch.load(f'{bb_type}_ngrams_{str(n_count)}_model.pth')
-        blackbox = blackbox.to(DEVICE)
+        blackbox = torch.load(SAVED_MODEL_PATH + f'{bb_type}_ngram_{str(n_count)}_model.pth')
+        if bb_type != 'knn':
+            blackbox = blackbox.to(DEVICE)
+        else:
+            blackbox = blackbox.to(DEVICE_CPU)
         combined_results.append(blackbox.predict_proba(ngram_data_malware))
 
     if bb_type == 'mlp':

@@ -85,8 +85,12 @@ def inject(input_file, copy_file=False, blackbox=''):
     # print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
     command = f'apktool b temp_file_dir/{filename} -q -b'
     command = command.split()
-    process = subprocess.Popen(command)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE)
     process.wait()
+    out, err = process.communicate()
+    if err:
+        print(err)
+        raise
 
     if copy_file:
         path, name = os.path.split(input_file)
@@ -94,11 +98,17 @@ def inject(input_file, copy_file=False, blackbox=''):
         copy_path = os.path.join(path, name)
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {copy_path}'
         command = command.split()
-        process = subprocess.Popen(command)
-        process.wait()
+        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err)
+            raise
     else:
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {input_file}'
         command = command.split()
-        process = subprocess.Popen(command)
-        process.wait()
+        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        out, err = process.communicate()
+        if err:
+            print(err)
+            raise
     # print(f'Finished!')
