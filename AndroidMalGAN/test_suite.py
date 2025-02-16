@@ -90,6 +90,17 @@ def sample_list():
                         f.write(sub_dir + '\n')
 
 def test_data(n_count=5):
+    intent_hybrid = []
+    permission_hybrid = []
+    api_hybrid = []
+    ngram_hybrid = []
+    daisychain_hybrid = []
+    hybrid_results = []
+    intent_ensemble_results = []
+    permission_ensemble_results = []
+    api_ensemble_results = []
+    ngram_ensemble_results = []
+    daisy_ensemble_results = []
     with open('intent_features.txt', 'r') as file:
         features = file.read()
         intent_features = features.split('\n')
@@ -117,6 +128,10 @@ def test_data(n_count=5):
                 print(f'{f_name} {str(count)}')
                 print('####################intent_inject####################')
                 intent_inject(s, copy_file=True, blackbox=bb_model["name"])
+                with open("test_suite/intent_ensemble_results.txt", "a") as f:
+                    result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
+                    f.write(str(result) + '\n')
+
                 intent_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
 
                 if os.path.isfile(f'test_suite/intent_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
@@ -135,6 +150,10 @@ def test_data(n_count=5):
                     df.to_csv(f'test_suite/malware_intent_{bb_model["name"]}_modified.csv')
                 print('####################permission_inject####################')
                 permission_inject(s, copy_file=True, blackbox=bb_model["name"])
+                with open("test_suite/permission_ensemble_results.txt", "a") as f:
+                    result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
+                    f.write(str(result) + '\n')
+
                 permission_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
                 if os.path.isfile(f'test_suite/permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
                     df = pd.DataFrame(permission_hybrid_row)
@@ -152,6 +171,10 @@ def test_data(n_count=5):
                     df.to_csv(f'test_suite/malware_permission_{bb_model["name"]}_modified.csv')
                 print('#####################api_inject####################')
                 api_inject(s, copy_file=True, blackbox=bb_model["name"])
+                with open("test_suite/api_ensemble_results.txt", "a") as f:
+                    result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
+                    f.write(str(result) + '\n')
+
                 api_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
 
                 if os.path.isfile(f'test_suite/api_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
@@ -170,6 +193,10 @@ def test_data(n_count=5):
                     df.to_csv(f'test_suite/malware_api_{bb_model["name"]}_modified.csv')
                 print('#####################ngram_inject####################')
                 ngrams_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
+                with open(f"test_suite/ngram_{str(n_count)}_ensemble_results.txt", "a") as f:
+                    result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
+                    f.write(str(result) + '\n')
+
                 ngram_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
 
                 if os.path.isfile(f'test_suite/ngram_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
@@ -188,6 +215,10 @@ def test_data(n_count=5):
                     df.to_csv(f'test_suite/malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv')
                 print('#####################daisy_inject####################')
                 daisy_chain_attack(file_path=s, n_count=n_count, blackbox=bb_model["name"])
+                with open("test_suite/daisy_ensemble_results.txt", "a") as f:
+                    result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
+                    f.write(str(result) + '\n')
+
                 daisy_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
                 if os.path.isfile(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
                     df = pd.DataFrame(daisy_hybrid_row)
@@ -197,6 +228,10 @@ def test_data(n_count=5):
                     df.to_csv(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
                 print('#####################hybrid_inject####################')
                 hybrid_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
+                with open("test_suite/hybrid_ensemble_results.txt", "a") as f:
+                    result = hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count)
+                    f.write(str(result) + '\n')
+
                 hybrid_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
                 if os.path.isfile(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
                     df = pd.DataFrame(hybrid_hybrid_row)
@@ -240,17 +275,6 @@ def test_data(n_count=5):
 def run_tests(n_count=5):
     if os.path.exists('test_suite_results.txt'):
         os.remove('test_suite_results.txt')
-
-    sample_md5s = []
-    with open("hybrid_samples_test.txt", "w") as f:
-        for item in os.walk(MALWAREDIR):
-            sub_dir = item[0]
-            if md5_hash := re.findall(r"([a-fA-F\d]{32})", sub_dir):
-                if md5_hash[0] not in sample_md5s:
-                    if not os.listdir(sub_dir):
-                        continue
-                    sample_md5s.append(md5_hash[0])
-                    f.write(sub_dir + '\n')
 
     intent_hybrid = []
     permission_hybrid = []
