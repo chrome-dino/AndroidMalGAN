@@ -85,8 +85,11 @@ def inject(input_file, copy_file=False, blackbox=''):
     # print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
     command = f'apktool b temp_file_dir/{filename} -q -b'
     command = command.split()
-    process = subprocess.Popen(command)
-    process.wait()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE)
+    out, err = process.communicate()
+    if err:
+        print(err)
+        raise
 
     if copy_file:
         path, name = os.path.split(input_file)

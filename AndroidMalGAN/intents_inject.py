@@ -23,8 +23,11 @@ def inject(input_file, copy_file=False, blackbox=''):
     # print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
     command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
     command = command.split()
-    process = subprocess.Popen(command)
-    process.wait()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE)
+    out, err = process.communicate()
+    if err:
+        print(err)
+        raise
 
     with open('intent_features.txt', 'r') as file:
         intent_features = file.read()
@@ -86,7 +89,6 @@ def inject(input_file, copy_file=False, blackbox=''):
     command = f'apktool b temp_file_dir/{filename} -q -b'
     command = command.split()
     process = subprocess.Popen(command, stdout=subprocess.PIPE)
-    process.wait()
     out, err = process.communicate()
     if err:
         print(err)
