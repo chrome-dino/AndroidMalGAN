@@ -47,7 +47,7 @@ def hybrid_ensemble_detector(bb_type='', input_file='', n_count=3, inject=False)
     if inject:
         command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
         command = command.split()
-        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err)

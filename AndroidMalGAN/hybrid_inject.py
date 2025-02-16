@@ -50,7 +50,7 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     # print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
     command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
     command = command.split()
-    process = subprocess.Popen(command, stdout=subprocess.PIPE)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = process.communicate()
     if err:
         print(err)
@@ -210,7 +210,7 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     # print(f'Compiling file: {filename} with command: apktool b temp_file_dir/{filename}')
     command = f'apktool b temp_file_dir/{filename} -q -b'
     command = command.split()
-    process = subprocess.Popen(command, stdout=subprocess.PIPE)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = process.communicate()
     if err:
         print(err)
@@ -222,7 +222,7 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
         copy_path = os.path.join(path, name)
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {copy_path}'
         command = command.split()
-        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err)
@@ -230,7 +230,7 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     else:
         command = f'mv -f temp_file_dir/{filename}/dist/{filename}.apk {input_file}'
         command = command.split()
-        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = process.communicate()
         if err:
             print(err)

@@ -359,6 +359,35 @@ def run_tests(n_count=5):
                 hybrid_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
                 hybrid_results.append(hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count))
 
+            final = []
+            with open(f"test_suite/intent_ensemble_{bb_model['name']}_results.txt") as test_results:
+                for result_str in test_results:
+                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                    result_row = [float(result_read[0]), float(result_read[1])]
+                    final.append(result_row)
+            intent_ensemble_results = final
+            final = []
+            with open(f"test_suite/api_ensemble_{bb_model['name']}_results.txt") as test_results:
+                for result_str in test_results:
+                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                    result_row = [float(result_read[0]), float(result_read[1])]
+                    final.append(result_row)
+            api_ensemble_results = final
+            final = []
+            with open(f"test_suite/permission_ensemble_{bb_model['name']}_results.txt") as test_results:
+                for result_str in test_results:
+                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                    result_row = [float(result_read[0]), float(result_read[1])]
+                    final.append(result_row)
+            permission_ensemble_results = final
+            final =[]
+            with open(f"test_suite/ngram_{str(n_count)}_ensemble_{bb_model['name']}_results.txt") as test_results:
+                for result_str in test_results:
+                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                    result_row = [float(result_read[0]), float(result_read[1])]
+                    final.append(result_row)
+            ngram_ensemble_results = final
+
             intent_results = blackbox_test(test_data=intent_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
             permission_results = blackbox_test(test_data=permission_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
             api_results = blackbox_test(test_data=api_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
@@ -380,6 +409,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} intent malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -391,6 +422,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} permission malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -402,6 +435,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} api malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -413,6 +448,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} ngram malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -425,6 +462,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} daisy chain attack'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -437,6 +476,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -449,6 +490,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} intent feature set malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -461,6 +504,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} permissions feature set malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -473,6 +518,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} api feature set malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -485,6 +532,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} ngram {str(n_count)} feature set malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -497,6 +546,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} daisy chain attack'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score*100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -538,6 +589,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'intents detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -554,6 +607,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'permissions detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -570,6 +625,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'apis detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -586,6 +643,8 @@ def run_tests(n_count=5):
                 else:
                     mal += 1
             result_str = f'ngram {str(n_count)} detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
+            score = ben / (ben + mal)
+            result_str = result_str + f' | {str(score * 100)}% bypass'
             print(result_str)
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
@@ -623,6 +682,8 @@ def retrain(model_type=''):
             else:
                 mal += 1
         result_str = f'{model_type} detector {bb["name"]} predicted (modified malware files): {str(ben)} benign files and {str(mal)} malicious files on {bb["name"]} {model_type} retrained black box'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
         print(result_str)
         with open('test_suite_results.txt', 'a') as f:
             f.write(result_str + '\n')
@@ -638,6 +699,8 @@ def retrain(model_type=''):
             else:
                 mal += 1
         result_str = f'{model_type} detector {bb["name"]} predicted (unmodified malware files): {str(ben)} benign files and {str(mal)} malicious files on {bb["name"]} {model_type} retrained black box'
+        score = mal / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% correctly identified malicious files'
         print(result_str)
         with open('test_suite_results.txt', 'a') as f:
             f.write(result_str + '\n')
@@ -653,6 +716,8 @@ def retrain(model_type=''):
             else:
                 mal += 1
         result_str = f'{model_type} detector {bb["name"]} predicted (benign files): {str(ben)} benign files and {str(mal)} malicious files on {bb["name"]} {model_type} mixed retrained black box'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% correctly identified benign files'
         print(result_str)
         with open('test_suite_results.txt', 'a') as f:
             f.write(result_str + '\n')
@@ -685,6 +750,8 @@ def retrain(model_type=''):
             else:
                 mal += 1
         result_str = f'{model_type} detector {bb["name"]} predicted (modified malware files): {str(ben)} benign files and {str(mal)} malicious files on {bb["name"]} {model_type} mixed retrained black box'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
         print(result_str)
         with open('test_suite_results.txt', 'a') as f:
             f.write(result_str + '\n')
@@ -700,6 +767,8 @@ def retrain(model_type=''):
             else:
                 mal += 1
         result_str = f'{model_type} detector {bb["name"]} predicted (unmodified malware files): {str(ben)} benign files and {str(mal)} malicious files on {bb["name"]} {model_type} mixed retrained black box'
+        score = mal / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% correctly identified malicious files'
         print(result_str)
         with open('test_suite_results.txt', 'a') as f:
             f.write(result_str + '\n')
@@ -715,6 +784,8 @@ def retrain(model_type=''):
             else:
                 mal += 1
         result_str = f'{model_type} detector {bb["name"]} predicted (benign files): {str(ben)} benign files and {str(mal)} malicious files on {bb["name"]} {model_type} mixed retrained black box'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% correctly identified benign files'
         print(result_str)
         with open('test_suite_results.txt', 'a') as f:
             f.write(result_str + '\n')
