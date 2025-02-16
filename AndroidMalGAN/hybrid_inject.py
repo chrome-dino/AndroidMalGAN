@@ -53,6 +53,19 @@ def inject(input_file, copy_file=False, n_count=5, blackbox=''):
     process = subprocess.Popen(command)
     process.wait()
 
+    manifest = os.path.join('temp_file_dir', filename, 'AndroidManifest.xml')
+    tree = ET.parse(manifest)
+    root = tree.getroot()
+    for application in root.findall('application'):
+        attributes = application.attrib
+        remove = []
+        for attribute in attributes:
+            if 'qihoo' in attribute:
+                remove.append(attribute)
+        for attribute in remove:
+            del application.attrib[attribute]
+    tree.write(manifest, encoding='utf-8', xml_declaration=True)
+
     data_malware = labeled_hybrid_data(root_dir='temp_file_dir', n_count=n_count, single_file=True)
     labels_malware = list(data_malware[0].keys())
     data_malware = [data_malware[0][k] for k in labels_malware]

@@ -50,6 +50,17 @@ def inject(input_file, copy_file=False, blackbox=''):
         diff = gen_malware[i] - data_tensor_malware[0][i]
         final[labels_malware[i]] = diff.item()
     manifest = os.path.join('temp_file_dir', filename, 'AndroidManifest.xml')
+    tree = ET.parse(manifest)
+    root = tree.getroot()
+    for application in root.findall('application'):
+        attributes = application.attrib
+        remove = []
+        for attribute in attributes:
+            if 'qihoo' in attribute:
+                remove.append(attribute)
+        for attribute in remove:
+            del application.attrib[attribute]
+    tree.write(manifest, encoding='utf-8', xml_declaration=True)
     for permission in final:
         if final[permission] < 1.0:
             continue

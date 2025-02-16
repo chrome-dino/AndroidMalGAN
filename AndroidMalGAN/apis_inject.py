@@ -5,6 +5,7 @@ from other_apk_feature_extract import labeled_api_data
 from apis_model import ApisGenerator
 import torch
 import json
+import xml.etree.ElementTree as ET
 import numpy as np
 import pandas as pd
 
@@ -34,6 +35,20 @@ def inject(input_file, copy_file=False, blackbox=''):
     process.wait()
     data_malware = labeled_api_data(root_dir='temp_file_dir', api_features=api_features,
                                     single_file=True)
+
+    manifest = os.path.join('temp_file_dir', filename, 'AndroidManifest.xml')
+    tree = ET.parse(manifest)
+    root = tree.getroot()
+    for application in root.findall('application'):
+        attributes = application.attrib
+        remove = []
+        for attribute in attributes:
+            if 'qihoo' in attribute:
+                remove.append(attribute)
+        for attribute in remove:
+            del application.attrib[attribute]
+    tree.write(manifest, encoding='utf-8', xml_declaration=True)
+
     # df = pd.DataFrame(data_malware)
     # df.to_csv('temp_file_dir/malware_ngram.csv')
     # data_malware = np.loadtxt('temp_file_dir/malware_ngram.csv', delimiter=',')

@@ -115,6 +115,7 @@ def test_data(n_count=5):
                 s_mod = os.path.join(*s_list)
                 count += 1
                 print(f'{f_name} {str(count)}')
+                print('####################intent_inject####################')
                 intent_inject(s, copy_file=True, blackbox=bb_model["name"])
                 intent_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
 
@@ -132,7 +133,7 @@ def test_data(n_count=5):
                 else:
                     df = pd.DataFrame(intent_row)
                     df.to_csv(f'test_suite/malware_intent_{bb_model["name"]}_modified.csv')
-
+                print('####################permission_inject####################')
                 permission_inject(s, copy_file=True, blackbox=bb_model["name"])
                 permission_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
                 if os.path.isfile(f'test_suite/permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
@@ -149,7 +150,7 @@ def test_data(n_count=5):
                 else:
                     df = pd.DataFrame(permission_row)
                     df.to_csv(f'test_suite/malware_permission_{bb_model["name"]}_modified.csv')
-
+                print('#####################api_inject####################')
                 api_inject(s, copy_file=True, blackbox=bb_model["name"])
                 api_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
 
@@ -167,7 +168,7 @@ def test_data(n_count=5):
                 else:
                     df = pd.DataFrame(api_row)
                     df.to_csv(f'test_suite/malware_api_{bb_model["name"]}_modified.csv')
-
+                print('#####################ngram_inject####################')
                 ngrams_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
                 ngram_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
 
@@ -185,7 +186,7 @@ def test_data(n_count=5):
                 else:
                     df = pd.DataFrame([ngram_row])
                     df.to_csv(f'test_suite/malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv')
-
+                print('#####################daisy_inject####################')
                 daisy_chain_attack(file_path=s, n_count=n_count, blackbox=bb_model["name"])
                 daisy_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
                 if os.path.isfile(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):
@@ -194,7 +195,7 @@ def test_data(n_count=5):
                 else:
                     df = pd.DataFrame(daisy_hybrid_row)
                     df.to_csv(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv')
-
+                print('#####################hybrid_inject####################')
                 hybrid_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
                 hybrid_hybrid_row = labeled_hybrid_data(root_dir='temp_file_dir', malware=False, n_count=n_count, single_file=True)
                 if os.path.isfile(f'test_suite/hybrid_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv'):

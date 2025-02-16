@@ -59,10 +59,15 @@ def inject(input_file, copy_file=False, blackbox=''):
         # Parse the XML file
         tree = ET.parse(manifest)
         root = tree.getroot()
-        # for application in root.findall('application'):
-        #     for activity in application.findall('activity'):
-        #         for intent in activity.findall('intent-filter'):
-        #             actions = intent.findall('action')
+        for application in root.findall('application'):
+            attributes = application.attrib
+            remove = []
+            for attribute in attributes:
+                if 'qihoo' in attribute:
+                    remove.append(attribute)
+            for attribute in remove:
+                del application.attrib[attribute]
+
         # Add a new element
         activity = root.findall('application')[0].find('activity')
         intent_filter = ET.Element('intent-filter')
