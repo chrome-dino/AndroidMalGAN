@@ -283,81 +283,10 @@ def run_tests(n_count=5):
     if os.path.exists('test_suite_results.txt'):
         os.remove('test_suite_results.txt')
 
-    intent_hybrid = []
-    permission_hybrid = []
-    api_hybrid = []
-    ngram_hybrid = []
-    daisychain_hybrid = []
-    hybrid_results = []
-    intent_ensemble_results = []
-    permission_ensemble_results = []
-    api_ensemble_results = []
-    ngram_ensemble_results = []
-    daisy_ensemble_results = []
     with open("hybrid_samples_test.txt") as samples:
         hybrid_bb_models = get_bb_models('hybrid_5')
         for bb_model in hybrid_bb_models:
             blackbox = bb_model['model']
-            for s in samples:
-                s = s.rstrip()
-                s_list = list(os.path.split(s))
-                f_name = s_list[-1]
-                s_list[-1] = 'modified_' + f_name
-                s_mod = os.path.join(*s_list)
-
-                intent_inject(s, copy_file=True, blackbox=bb_model["name"])
-                intent_ensemble_results.append(hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count))
-                intent_hybrid.append(labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
-                if LABEL:
-                    intent_row = labeled_intent_data(root_dir=s_mod, malware=False, single_file=True)
-                    if os.path.isfile(f'malware_intent_modified.csv'):
-                        df = pd.DataFrame(intent_row)
-                        df.to_csv(f'malware_intent_modified.csv', mode='a', header=False)
-                    else:
-                        df = pd.DataFrame(intent_row)
-                        df.to_csv(f'malware_intent_modified.csv')
-
-                permission_inject(s, copy_file=True, blackbox=bb_model["name"])
-                permission_ensemble_results.append(hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count))
-                permission_hybrid.append(labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
-                if LABEL:
-                    permission_row = labeled_perm_data(root_dir=s_mod, malware=False, single_file=True)
-                    if os.path.isfile(f'malware_permission_modified.csv'):
-                        df = pd.DataFrame(permission_row)
-                        df.to_csv(f'malware_permission_modified.csv', mode='a', header=False)
-                    else:
-                        df = pd.DataFrame(permission_row)
-                        df.to_csv(f'malware_permission_modified.csv')
-
-                api_inject(s, copy_file=True, blackbox=bb_model["name"])
-                api_ensemble_results.append(hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count))
-                api_hybrid.append(labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
-                if LABEL:
-                    api_row = labeled_api_data(root_dir=s_mod, malware=False, single_file=True)
-                    if os.path.isfile(f'malware_api_modified.csv'):
-                        df = pd.DataFrame(api_row)
-                        df.to_csv(f'malware_api_modified.csv', mode='a', header=False)
-                    else:
-                        df = pd.DataFrame(api_row)
-                        df.to_csv(f'malware_api_modified.csv')
-
-                ngrams_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
-                ngram_ensemble_results.append(hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count))
-                ngram_hybrid.append(labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
-                if LABEL:
-                    ngram_row = labeled_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
-                    if os.path.isfile(f'malware_ngram_{str(n_count)}_modified.csv'):
-                        df = pd.DataFrame(ngram_row)
-                        df.to_csv(f'malware_ngram_{str(n_count)}_modified.csv', mode='a', header=False)
-                    else:
-                        df = pd.DataFrame([ngram_row])
-                    df.to_csv(f'malware_ngram_{str(n_count)}_modified.csv')
-                daisy_chain_attack(file_path=s, n_count=n_count, blackbox=bb_model["name"])
-                daisy_ensemble_results.append(hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count))
-                daisychain_hybrid.append(labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
-
-                hybrid_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
-                hybrid_results.append(hybrid_ensemble_detector(bb_type=bb_model["name"], input_file=s_mod, n_count=n_count))
 
             final = []
             with open(f"test_suite/intent_ensemble_{bb_model['name']}_results.txt") as test_results:
@@ -387,6 +316,42 @@ def run_tests(n_count=5):
                     result_row = [float(result_read[0]), float(result_read[1])]
                     final.append(result_row)
             ngram_ensemble_results = final
+            final = []
+            with open(f"test_suite/hybrid_ensemble_{bb_model['name']}_results.txt") as test_results:
+                for result_str in test_results:
+                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                    result_row = [float(result_read[0]), float(result_read[1])]
+                    final.append(result_row)
+            hybrid_results = final
+            final = []
+            with open(f"test_suite/daisy_ensemble_{bb_model['name']}_results.txt") as test_results:
+                for result_str in test_results:
+                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                    result_row = [float(result_read[0]), float(result_read[1])]
+                    final.append(result_row)
+            daisy_ensemble_results = final
+
+
+            malware_hybrid = np.loadtxt(f'test_suite/intent_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
+            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+            malware_hybrid = malware_hybrid[:, 1:]
+            intent_hybrid = torch.tensor(malware_hybrid).float()
+            malware_hybrid = np.loadtxt(f'test_suite/permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
+            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+            malware_hybrid = malware_hybrid[:, 1:]
+            permission_hybrid = torch.tensor(malware_hybrid).float()
+            malware_hybrid = np.loadtxt(f'test_suite/api_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
+            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+            malware_hybrid = malware_hybrid[:, 1:]
+            api_hybrid = torch.tensor(malware_hybrid).float()
+            malware_hybrid = np.loadtxt(f'test_suite/ngram_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
+            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+            malware_hybrid = malware_hybrid[:, 1:]
+            ngram_hybrid = torch.tensor(malware_hybrid).float()
+            malware_hybrid = np.loadtxt(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
+            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+            malware_hybrid = malware_hybrid[:, 1:]
+            daisychain_hybrid = torch.tensor(malware_hybrid).float()
 
             intent_results = blackbox_test(test_data=intent_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
             permission_results = blackbox_test(test_data=permission_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
@@ -552,30 +517,22 @@ def run_tests(n_count=5):
             with open('test_suite_results.txt', 'a') as f:
                 f.write(result_str + '\n')
 
-            labeled_intents = []
-            labeled_perms = []
-            labeled_apis = []
-            labeled_ngrams = []
-            for s in samples:
-                s = s.rstrip()
-                s_list = list(os.path.split(s))
-                f_name = s_list[-1]
-                s_list[-1] = 'modified_' + f_name
-                s_mod = os.path.join(*s_list)
-
-                hybrid_inject(s, copy_file=True, n_count=n_count, blackbox=bb_model["name"])
-                if LABEL:
-                    hybrid_row = labeled_hybrid_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)
-                    if os.path.isfile(f'malware_hybrid_modified.csv'):
-                        df = pd.DataFrame(hybrid_row)
-                        df.to_csv(f'malware_hybrid_modified.csv', mode='a', header=False)
-                    else:
-                        df = pd.DataFrame(hybrid_row)
-                        df.to_csv(f'malware_hybrid_modified.csv')
-                labeled_intents.append(labeled_intent_data(root_dir=s_mod, malware=False, single_file=True)[0])
-                labeled_apis.append(labeled_api_data(root_dir=s_mod, malware=False, single_file=True)[0])
-                labeled_perms.append(labeled_perm_data(root_dir=s_mod, malware=False, single_file=True)[0])
-                labeled_ngrams.append(labeled_data(root_dir=s_mod, malware=False, n_count=n_count, single_file=True)[0])
+            malware_hybrid = np.loadtxt(f'test_suite/malware_intent_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
+            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+            malware_hybrid = malware_hybrid[:, 1:]
+            labeled_intents = torch.tensor(malware_hybrid).float()
+            malware_hybrid = np.loadtxt(f'test_suite/malware_permission_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
+            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+            malware_hybrid = malware_hybrid[:, 1:]
+            labeled_perms = torch.tensor(malware_hybrid).float()
+            malware_hybrid = np.loadtxt(f'test_suite/malware_api_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
+            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+            malware_hybrid = malware_hybrid[:, 1:]
+            labeled_apis = torch.tensor(malware_hybrid).float()
+            malware_hybrid = np.loadtxt(f'test_suite/malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
+            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+            malware_hybrid = malware_hybrid[:, 1:]
+            labeled_ngrams = torch.tensor(malware_hybrid).float()
 
             bb = load_blackbox(bb_model["name"], f'{bb_model["name"]}_intents_model.pth')
             intent_results = blackbox_test(test_data=labeled_intents, blackbox=bb, bb_name=bb_model["name"], model_type='intents')
