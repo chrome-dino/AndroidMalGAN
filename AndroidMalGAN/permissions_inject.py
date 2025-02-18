@@ -9,7 +9,10 @@ import json
 SAVED_MODEL_PATH = '../permissions_'
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
+def register_all_namespaces(f):
+    ns = dict([node for _, node in ET.iterparse(f, events=['start-ns'])])
+    for n in ns:
+        ET.register_namespace(n, ns[n])
 def inject(input_file, copy_file=False, blackbox=''):
     os.system('rm -rf temp_file_dir/*')
     with open(f'../config_permissions_{blackbox}_malgan.json') as f:
@@ -21,7 +24,7 @@ def inject(input_file, copy_file=False, blackbox=''):
 
     filename = os.path.basename(input_file).split('.', -1)[0]
     # print(f'decompiling file: {input_file} with command: apktool d -f {input_file} -o temp_file_dir')
-    command = f'apktool d -f {input_file} -o temp_file_dir/{filename} -q -b'
+    command = f'apktool d -f {input_file} -o temp_file_dir/{filename}'
     command = command.split()
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = process.communicate()
@@ -53,6 +56,7 @@ def inject(input_file, copy_file=False, blackbox=''):
         diff = gen_malware[i] - data_tensor_malware[0][i]
         final[labels_malware[i]] = diff.item()
     manifest = os.path.join('temp_file_dir', filename, 'AndroidManifest.xml')
+    register_all_namespaces(manifest)
     tree = ET.parse(manifest)
     root = tree.getroot()
     for application in root.findall('application'):
