@@ -84,10 +84,10 @@ class Classifier2(nn.Module):
         return x
 
 
-def train_mlp(config, data_benign=None, data_malware=None, model=''):
+def train_mlp(config, data_benign=None, data_malware=None, model='', size=350, rename=''):
     # os.chdir('/home/dsu/Documents/AndroidMalGAN/AndroidMalGAN')
     classifier = {'l1': config['c_1'], 'l2': config['c_2'], 'l3': config['c_3'], 'l4': config['c_4']}
-    discriminator = Classifier2(d_input_dim=460, l1=classifier['l1'], l2=classifier['l2'], l3=classifier['l3'], l4=classifier['l4'])
+    discriminator = Classifier2(d_input_dim=size, l1=classifier['l1'], l2=classifier['l2'], l3=classifier['l3'], l4=classifier['l4'])
     learning_rate_disc = config['lr_disc']
     l2lambda_disc = config['l2_lambda_disc']
     lossfun = nn.BCELoss()
@@ -124,7 +124,10 @@ def train_mlp(config, data_benign=None, data_malware=None, model=''):
         # if RAY_TUNE:
         #     ray.train.report(dict(d_loss=disc_loss.item()))
     print('mlp best epoch: ' + str(best_epoch))
-    torch.save(best_disc.state_dict(), SAVED_MODEL_PATH + model + '_mlp_model.pth')
+    if not rename:
+        torch.save(best_disc.state_dict(), SAVED_MODEL_PATH + model + '_mlp_model.pth')
+    else:
+        torch.save(best_disc.state_dict(), SAVED_MODEL_PATH + f'{rename}.pth')
     return
 
 
@@ -541,14 +544,13 @@ def train_blackbox(malware_data, benign_data, model_type, split_data=False):
         f.write(f'test set predicted: {str(ben)} benign files and {str(mal)} malicious files\n')
         f.write('Accuracy:' + str((ben/(mal+ben))*100) + '%\n')
 
-
+from sklearn.utils import resample
 def train_blackbox_retrain(malware_data, benign_data, model_type, bb_name, split_data=True):
     data_malware = np.loadtxt(malware_data, delimiter=',', skiprows=1)
     data_malware = (data_malware.astype(np.bool_)).astype(float)
 
-    data_benign = np.loadtxt(benign_data, delimiter=',', skiprows=1)
+    data_benign = np.loadtxt(benign_data, delimiter=',', skiprows=230)
     data_benign = (data_benign.astype(np.bool_)).astype(float)
-
     labels_benign = data_benign[:, 0]
     data_benign = data_benign[:, 1:]
 
@@ -605,15 +607,25 @@ def train_blackbox_retrain(malware_data, benign_data, model_type, bb_name, split
 
     if bb_name == 'gnb':
         GNB = GaussianNB()
+        GNB.fit(xTrain, yTrain)
         torch_gnb = convert(GNB, 'pytorch')
         torch.save(torch_gnb, f'../retrain_model.pth')
 
     if bb_name == 'lr':
         LR = LogisticRegression()
+        LR.fit(xTrain, yTrain)
         torch_lr = convert(LR, 'pytorch')
         torch.save(torch_lr, f'../retrain_model.pth')
 
     if bb_name == 'mlp':
-        with open(f'../config_{model_type}_mlp.json', 'r') as f:
+        if 'retrain' in model_type:
+            modelt = model_type.split('_',1)[1]
+        else:
+            modelt = model_type
+        with open(f'../config_{modelt}_mlp.json', 'r') as f:
             mlp_config = json.load(f)
-            train_mlp(mlp_config, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type)
+            if 'hybrid' in modelt:
+                train_mlp(mlp_config, data_benign=data_tensor_benign, data_malware=data_tensor_malware, model=model_type, size=460, rename='retrain_model')
+            else:
+                train_mlp(mlp_config, data_benign=data_tensor_benign, data_malware=data_tensor_malware,
+                          model=model_type, rename='retrain_model')

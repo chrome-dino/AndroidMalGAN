@@ -28,30 +28,27 @@ from train_blackbox import train_blackbox_retrain
 DOWNLOAD_TEST_SET = False
 LABEL = True
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-SAVED_MODEL_PATH = '../hybrid_'
+SAVED_MODEL_PATH = '../hybrid_5_'
 DATADIR = os.path.join('DATA')
 MALWAREDIR = 'DATA/MALWARE'
+DEVICE_CPU = torch.device('cpu')
 
-
-def load_blackbox(name, path):
+def load_blackbox(name, path, size=350):
     if name == 'ensemble':
         bb = None
     else:
         if name != 'mlp':
             bb = torch.load(path)
-            bb = bb.to(DEVICE)
+            bb = bb.to(DEVICE_CPU)
         else:
             load_model = torch.load(path)
-            if 'hybrid' in path:
-                input_len = 460
-            else:
-                input_len = 350
+            input_len = size
             bb = Classifier2(d_input_dim=input_len, l1=len(load_model['input.weight']),
                                    l2=len(load_model['fc1.weight']),
                                    l3=len(load_model['fc2.weight']), l4=len(load_model['fc3.weight']))
 
             bb.load_state_dict(torch.load(path))
-            bb = bb.to(DEVICE)
+            bb = bb.to(DEVICE_CPU)
             bb.eval()
     return bb
 
@@ -60,10 +57,14 @@ def get_bb_models(model_name):
     bb_models = [{'name': 'dt', 'path': f'../dt_{model_name}_model.pth'}, {'name': 'rf', 'path': f'../rf_{model_name}_model.pth'},
              {'name': 'svm', 'path': f'../svm_{model_name}_model.pth'}, {'name': 'knn', 'path': f'../knn_{model_name}_model.pth'},
              {'name': 'gnb', 'path': f'../gnb_{model_name}_model.pth'}, {'name': 'lr', 'path': f'../lr_{model_name}_model.pth'},
-             {'name': 'mlp', 'path': f'../{model_name}_mlp_model.pth'}, {'name': 'ensemble', 'path': ''}]
+             {'name': 'mlp', 'path': f'../{model_name}_mlp_model.pth'}]
     loaded_models = []
     for bb_model in bb_models:
-        bb = load_blackbox(bb_model["name"], bb_model['path'])
+        if 'hybrid' in bb_model["path"]:
+            i_size = 460
+        else:
+            i_size = 350
+        bb = load_blackbox(bb_model["name"], bb_model['path'], size=i_size)
         loaded_models.append({'name': bb_model["name"], 'model': bb})
     return loaded_models
 
@@ -291,328 +292,335 @@ def run_tests(n_count=5):
     if os.path.exists('test_suite_results.txt'):
         os.remove('test_suite_results.txt')
 
-    with open("hybrid_samples_test.txt") as samples:
-        hybrid_bb_models = get_bb_models('hybrid_5')
-        for bb_model in hybrid_bb_models:
-            blackbox = bb_model['model']
+    hybrid_bb_models = get_bb_models('hybrid_5')
+    for bb_model in hybrid_bb_models:
+        blackbox = bb_model['model']
 
-            final = []
-            with open(f"test_suite/intent_ensemble_{bb_model['name']}_results.txt") as test_results:
-                for result_str in test_results:
-                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
-                    result_row = [float(result_read[0]), float(result_read[1])]
-                    final.append(result_row)
-            intent_ensemble_results = final
-            final = []
-            with open(f"test_suite/api_ensemble_{bb_model['name']}_results.txt") as test_results:
-                for result_str in test_results:
-                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
-                    result_row = [float(result_read[0]), float(result_read[1])]
-                    final.append(result_row)
-            api_ensemble_results = final
-            final = []
-            with open(f"test_suite/permission_ensemble_{bb_model['name']}_results.txt") as test_results:
-                for result_str in test_results:
-                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
-                    result_row = [float(result_read[0]), float(result_read[1])]
-                    final.append(result_row)
-            permission_ensemble_results = final
-            final =[]
-            with open(f"test_suite/ngram_{str(n_count)}_ensemble_{bb_model['name']}_results.txt") as test_results:
-                for result_str in test_results:
-                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
-                    result_row = [float(result_read[0]), float(result_read[1])]
-                    final.append(result_row)
-            ngram_ensemble_results = final
-            final = []
-            with open(f"test_suite/hybrid_ensemble_{bb_model['name']}_results.txt") as test_results:
-                for result_str in test_results:
-                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
-                    result_row = [float(result_read[0]), float(result_read[1])]
-                    final.append(result_row)
-            hybrid_results = final
-            final = []
-            with open(f"test_suite/daisy_ensemble_{bb_model['name']}_results.txt") as test_results:
-                for result_str in test_results:
-                    result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
-                    result_row = [float(result_read[0]), float(result_read[1])]
-                    final.append(result_row)
-            daisy_ensemble_results = final
+        final = []
+        with open(f"test_suite/intent_ensemble_{bb_model['name']}_results.txt") as test_results:
+            for result_str in test_results:
+                result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                result_row = [float(result_read[0]), float(result_read[1])]
+                final.append(result_row)
+        intent_ensemble_results = final
+        final = []
+        with open(f"test_suite/api_ensemble_{bb_model['name']}_results.txt") as test_results:
+            for result_str in test_results:
+                result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                result_row = [float(result_read[0]), float(result_read[1])]
+                final.append(result_row)
+        api_ensemble_results = final
+        final = []
+        with open(f"test_suite/permission_ensemble_{bb_model['name']}_results.txt") as test_results:
+            for result_str in test_results:
+                result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                result_row = [float(result_read[0]), float(result_read[1])]
+                final.append(result_row)
+        permission_ensemble_results = final
+        final =[]
+        with open(f"test_suite/ngram_{str(n_count)}_ensemble_{bb_model['name']}_results.txt") as test_results:
+            for result_str in test_results:
+                result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                result_row = [float(result_read[0]), float(result_read[1])]
+                final.append(result_row)
+        ngram_ensemble_results = final
+        final = []
+        with open(f"test_suite/hybrid_ensemble_{bb_model['name']}_results.txt") as test_results:
+            for result_str in test_results:
+                result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                result_row = [float(result_read[0]), float(result_read[1])]
+                final.append(result_row)
+        hybrid_results = final
+        final = []
+        with open(f"test_suite/daisy_ensemble_{bb_model['name']}_results.txt") as test_results:
+            for result_str in test_results:
+                result_read = result_str.rsplit(' ', 1)[0].replace('[', '').replace(']', '').split(', ')
+                result_row = [float(result_read[0]), float(result_read[1])]
+                final.append(result_row)
+        daisy_ensemble_results = final
 
 
-            malware_hybrid = np.loadtxt(f'test_suite/intent_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
-            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
-            malware_hybrid = malware_hybrid[:, 1:]
-            intent_hybrid = torch.tensor(malware_hybrid).float()
-            malware_hybrid = np.loadtxt(f'test_suite/permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
-            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
-            malware_hybrid = malware_hybrid[:, 1:]
-            permission_hybrid = torch.tensor(malware_hybrid).float()
-            malware_hybrid = np.loadtxt(f'test_suite/api_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
-            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
-            malware_hybrid = malware_hybrid[:, 1:]
-            api_hybrid = torch.tensor(malware_hybrid).float()
-            malware_hybrid = np.loadtxt(f'test_suite/ngram_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
-            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
-            malware_hybrid = malware_hybrid[:, 1:]
-            ngram_hybrid = torch.tensor(malware_hybrid).float()
-            malware_hybrid = np.loadtxt(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
-            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
-            malware_hybrid = malware_hybrid[:, 1:]
-            daisychain_hybrid = torch.tensor(malware_hybrid).float()
+        malware_hybrid = np.loadtxt(f'test_suite/intent_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
+        malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+        malware_hybrid = malware_hybrid[:, 1:]
+        intent_hybrid = torch.tensor(malware_hybrid).float()
+        malware_hybrid = np.loadtxt(f'test_suite/permission_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
+        malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+        malware_hybrid = malware_hybrid[:, 1:]
+        permission_hybrid = torch.tensor(malware_hybrid).float()
+        malware_hybrid = np.loadtxt(f'test_suite/api_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
+        malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+        malware_hybrid = malware_hybrid[:, 1:]
+        api_hybrid = torch.tensor(malware_hybrid).float()
+        malware_hybrid = np.loadtxt(f'test_suite/ngram_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
+        malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+        malware_hybrid = malware_hybrid[:, 1:]
+        ngram_hybrid = torch.tensor(malware_hybrid).float()
+        malware_hybrid = np.loadtxt(f'test_suite/daisy_{str(n_count)}_{bb_model["name"]}_hybrid_{str(n_count)}.csv', delimiter=',', skiprows=1)
+        malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+        malware_hybrid = malware_hybrid[:, 1:]
+        daisychain_hybrid = torch.tensor(malware_hybrid).float()
 
-            intent_results = blackbox_test(test_data=intent_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
-            permission_results = blackbox_test(test_data=permission_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
-            api_results = blackbox_test(test_data=api_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
-            ngram_results = blackbox_test(test_data=ngram_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
-            daisychain_results = blackbox_test(test_data=daisychain_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
+        intent_results = blackbox_test(test_data=intent_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
+        permission_results = blackbox_test(test_data=permission_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
+        api_results = blackbox_test(test_data=api_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
+        ngram_results = blackbox_test(test_data=ngram_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
+        daisychain_results = blackbox_test(test_data=daisychain_hybrid, blackbox=blackbox, bb_name=bb_model["name"], model_type='hybrid_5')
 
-            if bb_model["name"] == 'svm':
-                intent_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in intent_results]
-                permission_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in permission_results]
-                api_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in api_results]
-                ngram_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in ngram_results]
-                daisychain_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in daisychain_results]
-            # results = torch.where(results > 0.5, True, False)
-            mal = 0
-            ben = 0
-            for result in intent_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} intent malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
-            mal = 0
-            ben = 0
-            for result in permission_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} permission malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
-            mal = 0
-            ben = 0
-            for result in api_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} api malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
-            mal = 0
-            ben = 0
-            for result in ngram_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} ngram malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
+        if bb_model["name"] == 'svm':
+            intent_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in intent_results]
+            permission_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in permission_results]
+            api_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in api_results]
+            ngram_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in ngram_results]
+            daisychain_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in daisychain_results]
+        # results = torch.where(results > 0.5, True, False)
+        mal = 0
+        ben = 0
+        for result in intent_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} intent malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
+        mal = 0
+        ben = 0
+        for result in permission_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} permission malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
+        mal = 0
+        ben = 0
+        for result in api_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} api malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
+        mal = 0
+        ben = 0
+        for result in ngram_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} ngram malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
 
-            mal = 0
-            ben = 0
-            for result in daisychain_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} daisy chain attack'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
+        mal = 0
+        ben = 0
+        for result in daisychain_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'hybrid detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} daisy chain attack'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
 
-            mal = 0
-            ben = 0
-            for result in hybrid_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
+        mal = 0
+        ben = 0
+        for result in hybrid_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
 
-            mal = 0
-            ben = 0
-            for result in intent_ensemble_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} intent feature set malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
+        mal = 0
+        ben = 0
+        for result in intent_ensemble_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} intent feature set malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
 
-            mal = 0
-            ben = 0
-            for result in permission_ensemble_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} permissions feature set malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
+        mal = 0
+        ben = 0
+        for result in permission_ensemble_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} permissions feature set malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
 
-            mal = 0
-            ben = 0
-            for result in api_ensemble_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} api feature set malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
+        mal = 0
+        ben = 0
+        for result in api_ensemble_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} api feature set malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
 
-            mal = 0
-            ben = 0
-            for result in ngram_ensemble_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} ngram {str(n_count)} feature set malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
+        mal = 0
+        ben = 0
+        for result in ngram_ensemble_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} ngram {str(n_count)} feature set malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
 
-            mal = 0
-            ben = 0
-            for result in daisy_ensemble_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} daisy chain attack'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score*100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
+        mal = 0
+        ben = 0
+        for result in daisy_ensemble_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'ensemble detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} daisy chain attack'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score*100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
 
-            malware_hybrid = np.loadtxt(f'test_suite/malware_intent_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
-            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
-            malware_hybrid = malware_hybrid[:, 1:]
-            labeled_intents = torch.tensor(malware_hybrid).float()
-            malware_hybrid = np.loadtxt(f'test_suite/malware_permission_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
-            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
-            malware_hybrid = malware_hybrid[:, 1:]
-            labeled_perms = torch.tensor(malware_hybrid).float()
-            malware_hybrid = np.loadtxt(f'test_suite/malware_api_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
-            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
-            malware_hybrid = malware_hybrid[:, 1:]
-            labeled_apis = torch.tensor(malware_hybrid).float()
-            malware_hybrid = np.loadtxt(f'test_suite/malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
-            malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
-            malware_hybrid = malware_hybrid[:, 1:]
-            labeled_ngrams = torch.tensor(malware_hybrid).float()
-
-            bb = load_blackbox(bb_model["name"], f'{bb_model["name"]}_intents_model.pth')
-            intent_results = blackbox_test(test_data=labeled_intents, blackbox=bb, bb_name=bb_model["name"], model_type='intents')
-            if bb["name"] == 'svm':
-                intent_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in intent_results]
-            mal = 0
-            ben = 0
-            for result in intent_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'intents detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
-
-            bb = load_blackbox(bb_model["name"], f'{bb_model["name"]}_permissions_model.pth')
-            permissions_results = blackbox_test(test_data=labeled_perms, blackbox=bb, bb_name=bb_model["name"], model_type='permissions')
-            if bb["name"] == 'svm':
-                permissions_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in permissions_results]
-            mal = 0
-            ben = 0
-            for result in permissions_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'permissions detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
-
-            bb = load_blackbox(bb_model["name"], f'{bb_model["name"]}_apis_model.pth')
-            api_results = blackbox_test(test_data=labeled_apis, blackbox=bb, bb_name=bb_model["name"], model_type='apis')
-            if bb_model["name"] == 'svm':
-                api_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in api_results]
-            mal = 0
-            ben = 0
-            for result in api_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'apis detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
-
-            bb = load_blackbox(bb_model["name"], f'{bb_model["name"]}_ngram_{str(n_count)}_model.pth')
-            ngram_results = blackbox_test(test_data=labeled_ngrams, blackbox=bb, bb_name=bb_model["name"], model_type=f'ngram_{str(n_count)}')
-            if bb_model["name"] == 'svm':
-                ngram_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in ngram_results]
-            mal = 0
-            ben = 0
-            for result in ngram_results:
-                if result[0] < 0.5:
-                    ben += 1
-                else:
-                    mal += 1
-            result_str = f'ngram {str(n_count)} detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
-            score = ben / (ben + mal)
-            result_str = result_str + f' | {str(score * 100)}% bypass'
-            print(result_str)
-            with open('test_suite_results.txt', 'a') as f:
-                f.write(result_str + '\n')
+        malware_hybrid = np.loadtxt(f'test_suite/malware_intent_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
+        malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+        malware_hybrid = malware_hybrid[:, 1:]
+        labeled_intents = torch.tensor(malware_hybrid).float()
+        malware_hybrid = np.loadtxt(f'test_suite/malware_permission_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
+        malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+        malware_hybrid = malware_hybrid[:, 1:]
+        labeled_perms = torch.tensor(malware_hybrid).float()
+        malware_hybrid = np.loadtxt(f'test_suite/malware_api_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
+        malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+        malware_hybrid = malware_hybrid[:, 1:]
+        labeled_apis = torch.tensor(malware_hybrid).float()
+        malware_hybrid = np.loadtxt(f'test_suite/malware_ngram_{str(n_count)}_{bb_model["name"]}_modified.csv', delimiter=',', skiprows=1)
+        malware_hybrid = (malware_hybrid.astype(np.bool_)).astype(float)
+        malware_hybrid = malware_hybrid[:, 1:]
+        labeled_ngrams = torch.tensor(malware_hybrid).float()
+        if bb_model["name"] == 'mlp':
+            bb = load_blackbox(bb_model["name"], f'../intents_{bb_model["name"]}_model.pth')
+        else:
+            bb = load_blackbox(bb_model["name"], f'../{bb_model["name"]}_intents_model.pth')
+        intent_results = blackbox_test(test_data=labeled_intents, blackbox=bb, bb_name=bb_model["name"], model_type='intents')
+        if bb_model["name"] == 'svm':
+            intent_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in intent_results]
+        mal = 0
+        ben = 0
+        for result in intent_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'intents detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
+        if bb_model["name"] == 'mlp':
+            bb = load_blackbox(bb_model["name"], f'../permissions_{bb_model["name"]}_model.pth')
+        else:
+            bb = load_blackbox(bb_model["name"], f'../{bb_model["name"]}_permissions_model.pth')
+        permissions_results = blackbox_test(test_data=labeled_perms, blackbox=bb, bb_name=bb_model["name"], model_type='permissions')
+        if bb_model["name"] == 'svm':
+            permissions_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in permissions_results]
+        mal = 0
+        ben = 0
+        for result in permissions_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'permissions detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
+        if bb_model["name"] == 'mlp':
+            bb = load_blackbox(bb_model["name"], f'../apis_{bb_model["name"]}_model.pth')
+        else:
+            bb = load_blackbox(bb_model["name"], f'../{bb_model["name"]}_apis_model.pth')
+        api_results = blackbox_test(test_data=labeled_apis, blackbox=bb, bb_name=bb_model["name"], model_type='apis')
+        if bb_model["name"] == 'svm':
+            api_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in api_results]
+        mal = 0
+        ben = 0
+        for result in api_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'apis detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
+        if bb_model["name"] == 'mlp':
+            bb = load_blackbox(bb_model["name"], f'../ngram_{str(n_count)}_{bb_model["name"]}_model.pth')
+        else:
+            bb = load_blackbox(bb_model["name"], f'../{bb_model["name"]}_ngram_{str(n_count)}_model.pth')
+        ngram_results = blackbox_test(test_data=labeled_ngrams, blackbox=bb, bb_name=bb_model["name"], model_type=f'ngram_{str(n_count)}')
+        if bb_model["name"] == 'svm':
+            ngram_results = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in ngram_results]
+        mal = 0
+        ben = 0
+        for result in ngram_results:
+            if result[0] < 0.5:
+                ben += 1
+            else:
+                mal += 1
+        result_str = f'ngram {str(n_count)} detector {bb_model["name"]} predicted: {str(ben)} benign files and {str(mal)} malicious files on {bb_model["name"]} hybrid feature set malgan'
+        score = ben / (ben + mal)
+        result_str = result_str + f' | {str(score * 100)}% bypass'
+        print(result_str)
+        with open('test_suite_results.txt', 'a') as f:
+            f.write(result_str + '\n')
 
     model_types = ['permissions', 'intents', 'apis', f'ngram_{str(n_count)}', 'hybrid_5']
     for model_type in model_types:
@@ -629,15 +637,16 @@ def retrain(model_type=''):
     labels_malware = data_malware[:, 0:]
     data_malware = np.array(data_malware)
     data_tensor_malware = torch.tensor(data_malware).float()
-    train_data_malware = data_tensor_malware.to(DEVICE)
+    train_data_malware = data_tensor_malware.to(DEVICE_CPU)
 
-    bb_models = [{'name': 'rf', 'path': f'rf_retrain_{model_type}_model.pth'},
+    bb_models = [{'name': 'mlp', 'path': f'{model_type}_retrain_mlp_model.pth'},
+                {'name': 'rf', 'path': f'rf_retrain_{model_type}_model.pth'},
                  {'name': 'dt', 'path': f'dt_retrain_{model_type}_model.pth'},
                  {'name': 'svm', 'path': f'svm_retrain_{model_type}_model.pth'},
                  {'name': 'knn', 'path': f'knn_retrain_{model_type}_model.pth'},
                  {'name': 'gnb', 'path': f'gnb_retrain_{model_type}_model.pth'},
                  {'name': 'lr', 'path': f'lr_retrain_{model_type}_model.pth'},
-                 {'name': 'mlp', 'path': f'{model_type}_retrain_mlp_model.pth'}]
+                 ]
 
     # test modified test set on new black box
 
@@ -652,7 +661,7 @@ def retrain(model_type=''):
     labels_benign = data_benign[:, 0:]
     data_benign = np.array(data_benign)
     data_tensor_benign = torch.tensor(data_benign).float()
-    train_data_benign = data_tensor_benign.to(DEVICE)
+    train_data_benign = data_tensor_benign.to(DEVICE_CPU)
 
     partition = [0.6, 0.4]
     labeled_benign, data_tensor_benign, train_labels_benign, test_labels_benign = train_test_split(
@@ -671,16 +680,21 @@ def retrain(model_type=''):
         input_num = 460
 
     for bb in bb_models:
-        with open(f'../config_apis_{bb["name"]}_malgan.json') as f:
+        with open(f'../config_{model_type}_{bb["name"]}_malgan.json') as f:
             g = json.load(f)
 
         generator = Generator(noise_dims=g['g_noise'], input_layers=input_num, l2=g['g_1'], l3=g['g_2'], l4=g['g_3'])
-        generator.load_state_dict(torch.load(SAVED_MODEL_PATH + bb['name'] + '.pth', weights_only=True))
+        if 'ngram' not in model_type:
+            generator.load_state_dict(torch.load(f'../{model_type}_' + bb['name'] + '.pth', weights_only=True))
+        else:
+            generator.load_state_dict(torch.load(f'../opcode_ngram_' + bb['name'] + '_5_final.pth', weights_only=True))
+        generator = generator.to(DEVICE)
+        train_data_malware = train_data_malware.to(DEVICE)
         generator.eval()
         gen_malware = generator(train_data_malware)
         binarized_gen_malware = torch.where(gen_malware > 0.5, 1.0, 0.0)
         binarized_gen_malware_logical_or = torch.logical_or(train_data_malware, binarized_gen_malware).float()
-        gen_malware = binarized_gen_malware_logical_or.to(DEVICE)
+        gen_malware = binarized_gen_malware_logical_or.to(DEVICE_CPU)
         df = pd.DataFrame(gen_malware)
         df.to_csv(f'../malware_{model_type}_modified.csv')
 
@@ -689,8 +703,12 @@ def retrain(model_type=''):
         labeled_modified = (labeled_modified.astype(np.bool_)).astype(float)
         labeled_modified = labeled_modified[:, 1:]
         labeled_modified = torch.tensor(labeled_modified).float()
-        
-        blackbox = load_blackbox(bb["name"], '../retrain_model.pth')
+
+        if 'hybrid' in model_type:
+            i_size = 460
+        else:
+            i_size = 350
+        blackbox = load_blackbox(bb["name"], '../retrain_model.pth', size=i_size)
 
         labeled_modified, data_tensor_malware, train_labels_malware, test_labels_malware = train_test_split(
             labeled_modified, labels_malware, test_size=partition[0], random_state=42)
@@ -698,6 +716,10 @@ def retrain(model_type=''):
         results_modified = blackbox_test(test_data=labeled_modified, blackbox=blackbox, bb_name=bb["name"], model_type=model_type)
         if bb["name"] == 'svm':
             results_modified = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_modified]
+        if bb['name'] == 'knn':
+            # results_modified = results_modified[:8000]
+            results_modified = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_modified]
+
         mal = 0
         ben = 0
         for result in results_modified:
@@ -714,6 +736,9 @@ def retrain(model_type=''):
     # test unmodified test set on new black box
         results_unmodified = blackbox_test(test_data=labeled_unmodified, blackbox=blackbox, bb_name=bb["name"], model_type=model_type)
         if bb["name"] == 'svm':
+            results_unmodified = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_unmodified]
+        if bb['name'] == 'knn':
+            # results_modified = results_modified[:8000]
             results_unmodified = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_unmodified]
         mal = 0
         ben = 0
@@ -732,6 +757,9 @@ def retrain(model_type=''):
         results_benign = blackbox_test(test_data=labeled_benign, blackbox=blackbox, bb_name=bb["name"], model_type=model_type)
         if bb["name"] == 'svm':
             results_benign = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_benign]
+        if bb['name'] == 'knn':
+            # results_modified = results_modified[:8000]
+            results_benign = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_benign]
         mal = 0
         ben = 0
         for result in results_benign:
@@ -747,15 +775,21 @@ def retrain(model_type=''):
             f.write(result_str + '\n')
 
      # train black box on half modified set and half unmodified set
-        df1 = pd.read_csv(f'../malware_{model_type}_modified.csv', skiprows=1, nrows=4000)
-        df2 = pd.read_csv(f'../malware_{model_type}.csv', skiprows=1, nrows=4000)
-        df_merged = df1.append(df2, ignore_index=True)
+        df1 = pd.read_csv(f'../malware_{model_type}_modified.csv', skiprows=1, nrows=4000, header=None)
+        df2 = pd.read_csv(f'../malware_{model_type}.csv', skiprows=1, nrows=4000, header=None)
+        df1 = df1.drop(df2.columns[[0]], axis=1)
+        df2 = df2.drop(df2.columns[[0]], axis=1)
+        df_merged = pd.concat([df1, df2], axis=0, ignore_index=True)
         df_merged.to_csv(f'../malware_{model_type}_merged.csv')
 
         train_blackbox_retrain(f'../malware_{model_type}_merged.csv', f'../benign_{model_type}.csv', model_type, bb['name'], split_data=False)
         # labeled_modified = pd.read_csv(f'../malware_{model_type}_modified.csv')
 
-        blackbox = load_blackbox(bb["name"], '../retrain_model.pth')
+        if 'hybrid' in model_type:
+            i_size = 460
+        else:
+            i_size = 350
+        blackbox = load_blackbox(bb["name"], '../retrain_model.pth', size=i_size)
         labeled_modified = np.loadtxt(f'../malware_{model_type}_modified.csv', delimiter=',', skiprows=4001)
         labeled_modified = (labeled_modified.astype(np.bool_)).astype(float)
         labeled_modified = labeled_modified[:, 1:]
@@ -767,6 +801,9 @@ def retrain(model_type=''):
 
         results_modified = blackbox_test(test_data=labeled_modified, blackbox=blackbox, bb_name=bb["name"], model_type=model_type)
         if bb["name"] == 'svm':
+            results_modified = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_modified]
+        if bb['name'] == 'knn':
+            # results_modified = results_modified[:8000]
             results_modified = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_modified]
         mal = 0
         ben = 0
@@ -785,6 +822,9 @@ def retrain(model_type=''):
         results_unmodified = blackbox_test(test_data=labeled_unmodified, blackbox=blackbox, bb_name=bb["name"], model_type=model_type)
         if bb["name"] == 'svm':
             results_unmodified = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_unmodified]
+        if bb['name'] == 'knn':
+            # results_modified = results_modified[:8000]
+            results_unmodified = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_unmodified]
         mal = 0
         ben = 0
         for result in results_unmodified:
@@ -802,6 +842,9 @@ def retrain(model_type=''):
         results_benign = blackbox_test(test_data=labeled_benign, blackbox=blackbox, bb_name=bb["name"], model_type=model_type)
         if bb["name"] == 'svm':
             results_benign = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_benign]
+        if bb['name'] == 'knn':
+            # results_modified = results_modified[:8000]
+            results_benign = [[0.0, 1.0] if result == 1 else [1.0, 0.0] for result in results_benign]
         mal = 0
         ben = 0
         for result in results_benign:
@@ -817,4 +860,6 @@ def retrain(model_type=''):
             f.write(result_str + '\n')
 
 # sample_list()
-test_data(n_count=5)
+# test_data(n_count=5)
+# retrain('ngram_5')
+run_tests(n_count=5)
