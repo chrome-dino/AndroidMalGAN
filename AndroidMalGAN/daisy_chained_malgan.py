@@ -13,10 +13,11 @@ def daisy_chain_attack(file_path='', n_count=5, blackbox=''):
     f_name = f_list[-1]
     f_list[-1] = 'modified_' + f_name
     file_path_mod = os.path.join(*f_list)
-    # inject ngram
-    ngrams_inject(file_path, copy_file=True, n_count=n_count, blackbox=blackbox)
     # inject permissions
-    permission_inject(file_path_mod, copy_file=False, blackbox=blackbox)
+    permission_inject(file_path, copy_file=True, blackbox=blackbox)
+    # inject ngram
+    ngrams_inject(file_path_mod, copy_file=False, n_count=n_count, blackbox=blackbox)
+
     # inject intent
     intent_inject(file_path_mod, copy_file=False, blackbox=blackbox)
     # inject api
